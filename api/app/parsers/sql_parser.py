@@ -48,6 +48,7 @@ def analyze_sql(code: str, label: str | None = None) -> tuple[
         "joins": [], "filters": [], "aggregations": [], "statements": [],
         "ctes": [], "primary_source": [], "grain": {},
     }
+    primary_source: str | None = None
 
     try:
         statements = sqlglot.parse(code)
