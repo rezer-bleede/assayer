@@ -31,9 +31,15 @@ _SCHEME_MAP = {
     "bigquery": SourceType.BIGQUERY,
     "databricks": SourceType.DATABRICKS,
     "s3": SourceType.S3_CSV,
+    # clickhouse-connect speaks HTTP; the native 9000 TCP protocol is not it
+    "clickhouse": SourceType.CLICKHOUSE,
+    "clickhouse+http": SourceType.CLICKHOUSE,
+    "clickhouse+https": SourceType.CLICKHOUSE,
+    "ch": SourceType.CLICKHOUSE,
 }
 
 _WORDS = {
+    "clickhouse": SourceType.CLICKHOUSE,
     "postgres": SourceType.POSTGRES,
     "postgresql": SourceType.POSTGRES,
     "mysql": SourceType.MYSQL,
@@ -102,8 +108,13 @@ def parse_url(url: str) -> ConnectionSpec | None:
     )
     for k, v in params.items():
         attr = _KEYS.get(k)
-        if attr and getattr(spec, attr, None) in (None, ""):
-            setattr(spec, attr, v)
+        if attr:
+            if getattr(spec, attr, None) in (None, ""):
+                setattr(spec, attr, v)
+        else:
+            # unknown params are still evidence (`secure=true` on clickhouse
+            # URLs, driver knobs on any other); they never override known fields
+            spec.options.setdefault(k, v)
     return spec
 
 

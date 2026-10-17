@@ -47,6 +47,10 @@ make test          # pytest inside the api container
   Python AST sinks and sources; dbt manifest + `ref()`/`source()` extraction.
 - `test_planner.py` — baseline coverage, dedup, determinism, parity checks, and
   the file-to-warehouse contract check driven by data profiles.
+- `test_connectors_clickhouse.py` — ClickHouse dialect: `system.*` introspection SQL,
+  `readonly=2` session settings, the `NOT match()` regex form (with doubled
+  backslashes — ClickHouse eats string escapes), and the Postgres default rendering
+  staying byte-for-byte identical.
 - `test_source_filter.py` — intake routing shared by git and upload: what is
   code, what is data, what is junk, plus the generated/`.sql`-dump sniffs, the
   aggregate budget and `mode=files` trust.

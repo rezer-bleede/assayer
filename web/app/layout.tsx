@@ -127,7 +127,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 'SQL, Python, and dbt ETL parsing',
                 'Automated test plan generation',
                 'Human-in-the-loop approval',
-                'Multi-database support (PostgreSQL, MySQL, Snowflake, BigQuery, Databricks, S3)',
+                'Multi-database support (PostgreSQL, MySQL, ClickHouse, Snowflake, BigQuery, Databricks, S3)',
                 'Read-only query execution',
                 'Row-level failure samples',
               ],

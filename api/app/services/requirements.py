@@ -27,6 +27,7 @@ _DEFAULT_PORTS: dict[str, int] = {
     str(SourceType.MYSQL): 3306,
     str(SourceType.MSSQL): 1433,
     str(SourceType.SNOWFLAKE): 443,
+    str(SourceType.CLICKHOUSE): 8123,
 }
 
 

@@ -47,6 +47,7 @@ class SourceType(StrEnum):
     BIGQUERY = "bigquery"
     DATABRICKS = "databricks"
     MSSQL = "mssql"
+    CLICKHOUSE = "clickhouse"
     SQLITE = "sqlite"
     S3_CSV = "s3_csv"
     LOCAL_CSV = "local_csv"

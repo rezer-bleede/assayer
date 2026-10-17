@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.schemas import EtlSubmit
+from app.schemas import EtlSubmit, SourceType
 from app.services.ingest import (
     extract_connections,
     guess_language,
@@ -118,6 +118,36 @@ def test_from_url_rejects_non_url_with_clear_message() -> None:
         connect_from_url(FromUrlRequest(url="just some words about my database"))
     assert exc.value.status_code == 422
     assert "connection URL" in exc.value.detail
+
+
+def test_parse_clickhouse_url() -> None:
+    spec = parse_url(
+        "clickhouse://analyst:s3cret@analytics-ch.internal:8123/warehouse?secure=true"
+    )
+    assert spec is not None
+    assert spec.type is SourceType.CLICKHOUSE
+    assert spec.host == "analytics-ch.internal"
+    assert spec.port == 8123
+    assert spec.database == "warehouse"
+    assert spec.options == {"secure": "true"}
+    assert spec.password.get_secret_value() == "s3cret"
+
+
+def test_clickhouse_word_guess() -> None:
+    from app.services.ingest import guess_type
+
+    assert guess_type("our events live in clickhouse on the intranet") is (
+        SourceType.CLICKHOUSE
+    )
+
+
+def test_diagnosis_lists_clickhouse_as_supported() -> None:
+    from app.routers.connections import _url_diagnosis
+
+    msg = _url_diagnosis("redshift://u:p@rs.internal/db")
+    assert "redshift" in msg and "unsupported" in msg.lower()
+    msg = _url_diagnosis("clickhouse://u@h/db")
+    assert "Unsupported connection scheme" not in msg
 
 
 # --- templated dbt YAML values ---------------------------------------------- #

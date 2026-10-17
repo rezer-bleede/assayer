@@ -90,6 +90,17 @@ class Connector(abc.ABC):
     def resolve_schema(self, schema: str | None) -> str | None:
         return schema or self.default_schema or self.spec.schema_
 
+    def regex_mismatch(self, col_sql: str, regex: str) -> str:
+        """A boolean SQL expression: "this column fails the pattern".
+
+        Regex syntax is the only place our otherwise-ANSI probes truly
+        diverge across engines. The default is the Postgres `!~` operator
+        (byte-for-byte what the compiler emitted before dialects existed);
+        engines without it — ClickHouse — override with their own function.
+        """
+        escaped = "'" + regex.replace("'", "''") + "'"
+        return f"{col_sql} !~ {escaped}"
+
     def test(self) -> ConnectionStatus:
         start = time.perf_counter()
         try:

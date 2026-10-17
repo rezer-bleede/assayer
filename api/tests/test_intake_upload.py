@@ -168,8 +168,8 @@ def test_upload_rejects_an_enormous_file_with_a_clear_message() -> None:
     assert "per-file upload limit" in exc.value.detail
 
 
-def test_unknown_dbt_adapter_does_not_bubble_out_of_the_route() -> None:
-    """The clickhouse profiles.yml that once crashed uploads must analyse."""
+def test_clickhouse_profiles_uploads_with_engine_prefill() -> None:
+    """The plain-valued clickhouse profiles.yml: hint maps, no more drop/None."""
     files = [
         ("shop/dbt_project.yml", b"name: shop\n"),
         ("shop/models/stg_orders.sql", b"select * from {{ source('raw','orders') }}"),
@@ -182,7 +182,7 @@ def test_unknown_dbt_adapter_does_not_bubble_out_of_the_route() -> None:
     ]
     res = _call(files)
     req = res.required_sources[0]
-    assert req.engine_hint is None
+    assert req.engine_hint == "clickhouse"
     assert req.host_hint == "ch.internal"
     assert req.port_hint == 9000
 
@@ -210,6 +210,7 @@ def test_jinja_templated_clickhouse_project_uploads_clean() -> None:
     ]
     res = _call(files)
     req = res.required_sources[0]
+    assert req.engine_hint == "clickhouse"
     assert req.host_hint == "analytics-ch.internal"
     assert req.port_hint == 8123
     assert req.user_hint is None

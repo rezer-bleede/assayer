@@ -125,10 +125,10 @@ def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
         case "pattern":
             if not check.regex:
                 raise UnsafeSQLError("pattern check has no regex")
-            rx = _literal(check.regex)
+            mismatch = conn.regex_mismatch(f'"{check.column}"', check.regex)
             sql = (
                 f"SELECT COUNT(*) AS total, "
-                f"SUM(CASE WHEN \"{check.column}\" !~ {rx} THEN 1 ELSE 0 END) AS violations "
+                f"SUM(CASE WHEN {mismatch} THEN 1 ELSE 0 END) AS violations "
                 f"FROM {t}"
             )
             return sql, {}
@@ -185,7 +185,8 @@ def sample_failure_sql(check: CheckSpec, conn: Connector) -> str:
                 clauses.append(f'"{col}" > {_literal(check.max_value)}')
             return f"SELECT * FROM {t} WHERE " + " OR ".join(clauses)
         case "pattern":
-            return f'SELECT * FROM {t} WHERE "{col}" !~ {_literal(check.regex)}' 
+            mismatch = conn.regex_mismatch(f'"{col}"', check.regex or "")
+            return f"SELECT * FROM {t} WHERE {mismatch}"
         case "freshness":
             return f"SELECT * FROM {t} ORDER BY \"{col or '_ingest_ts'}\" DESC"
     return f"SELECT * FROM {t}"

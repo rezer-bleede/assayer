@@ -111,6 +111,8 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
    dbt's Jinja templates are resolved the same way: `{{ env_var('X', 'default') }}`
    yields its default literal; anything unresolvable (no default, conditionals) is
    dropped rather than shown raw — a hint we cannot honour never becomes a lie in the UI.
+   An adapter dbt names that we support (e.g. `type: clickhouse`) becomes the
+   connection question's pre-filled engine choice.
 
    A seed CSV that resolves to a live table later adds a **contract check**: any column the file promises but the warehouse lacks is real drift. Uploads can also be sent as `mode=files`, where the user's explicit selection overrides the classification (binaries and hard size caps still apply).
 
@@ -134,6 +136,7 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
 | PostgreSQL | read-only transactions |
 | MySQL / MariaDB | read-only sessions |
 | MSSQL | via ODBC driver 18 |
+| ClickHouse | HTTP driver (`clickhouse://…:8123`), session forced to `readonly=2`; introspects `system.*`; `?secure=true` for TLS |
 | SQLite / DuckDB files | local paths |
 | Snowflake | account / warehouse / role |
 | BigQuery | service-account JSON |

@@ -35,8 +35,9 @@ def test_engine_hint_survives_unknown_adapter() -> None:
     """dbt names adapters we cannot connect to; that must not kill the parse."""
     from app.services.requirements import _engine_type
 
-    assert _engine_type("clickhouse") is None
     assert _engine_type("redshift") is None
+    assert _engine_type("trino") is None
+    assert _engine_type("clickhouse") is SourceType.CLICKHOUSE  # supported now
     assert _engine_type("postgres") is SourceType.POSTGRES
     assert _engine_type("") is None
     assert _engine_type(None) is None
@@ -47,9 +48,9 @@ def test_derive_requirements_keeps_host_for_unknown_adapter() -> None:
         sources=["raw.orders"],
         connection_hints=[
             {
-                "type": "clickhouse",
-                "host": "ch.internal",
-                "port": 9000,
+                "type": "redshift",
+                "host": "rs.internal",
+                "port": 5439,
                 "database": "analytics",
                 "schema": "raw",
                 "username": "selector",
@@ -59,11 +60,31 @@ def test_derive_requirements_keeps_host_for_unknown_adapter() -> None:
     reqs = derive_requirements(analysis)
     assert len(reqs) == 1
     assert reqs[0].engine_hint is None
-    assert reqs[0].host_hint == "ch.internal"
-    assert reqs[0].port_hint == 9000
+    assert reqs[0].host_hint == "rs.internal"
+    assert reqs[0].port_hint == 5439
     assert reqs[0].user_hint == "selector"
     # the database evidence still groups the tables correctly
     assert reqs[0].database == "analytics"
+
+
+def test_derive_requirements_maps_clickhouse_prefill() -> None:
+    analysis = _analysis(
+        sources=["raw.orders"],
+        connection_hints=[
+            {
+                "type": "clickhouse",
+                "host": "analytics-ch.internal",
+                "port": 8123,
+                "database": "warehouse",
+                "schema": "raw",
+                "username": None,
+            }
+        ],
+    )
+    reqs = derive_requirements(analysis)
+    assert reqs[0].engine_hint is SourceType.CLICKHOUSE
+    assert reqs[0].host_hint == "analytics-ch.internal"
+    assert reqs[0].port_hint == 8123
 
 
 def test_split_ref() -> None:

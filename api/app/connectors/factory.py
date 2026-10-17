@@ -11,6 +11,7 @@ _REGISTRY: dict[SourceType, str] = {
     SourceType.POSTGRES: "app.connectors.sqlalchemy_connector:PostgresConnector",
     SourceType.MYSQL: "app.connectors.sqlalchemy_connector:MySQLConnector",
     SourceType.MSSQL: "app.connectors.sqlalchemy_connector:MSSQLConnector",
+    SourceType.CLICKHOUSE: "app.connectors.clickhouse:ClickHouseConnector",
     SourceType.SQLITE: "app.connectors.sqlalchemy_connector:SQLiteConnector",
     SourceType.SNOWFLAKE: "app.connectors.snowflake:SnowflakeConnector",
     SourceType.BIGQUERY: "app.connectors.bigquery:BigQueryConnector",

@@ -26,6 +26,8 @@ dependencies = [
     # parquet profiling + the local-file / S3 connectors, which need a query
     # engine; it is the only heavyweight dependency in the image
     "duckdb>=1.1",
+    # ClickHouse over HTTP (clickhouse:// URLs); pure-python, small
+    "clickhouse-connect>=0.8",
 ]
 
 [project.optional-dependencies]
