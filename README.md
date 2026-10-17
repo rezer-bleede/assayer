@@ -1,30 +1,43 @@
 # data-qualitest-agent
 
-Agentic data testing and data quality auditing.
+<div align="center">
 
-You give it **data connection details** and **an ETL script**. It figures out the
-transformations, designs a test plan, connects to your sources, runs the tests,
-and reports what broke — with row-level samples.
+# qualitest
 
-Everything runs in Docker.
+**Agentic data testing and data quality auditing.**
 
----
+Provide your data connection details and ETL code/script — the agent figures out transformations, designs a test plan, connects to your data sources, runs tests, and reports results.
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-blue)](https://docker.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2-blue)](https://langchain-ai.github.io/langgraph/)
+
+</div>
 
 ## Quick start
 
 ```bash
-cp .env.example .env       # add your LLM key (optional — the app works without one)
-make up                    # or: docker compose up -d --build
+# 1. Clone the repo
+git clone <your-repo-url>
+cd data-qualitest-agent
+
+# 2. Copy env and configure
+cp .env.example .env
+# Add your LLM key (optional — the app works without one)
+
+# 3. Start the stack
+docker compose up -d --build
 ```
 
-| | |
-| --- | --- |
+| Service | URL |
+|---|---|
 | Chat UI | http://localhost:3010 |
 | API docs | http://localhost:8010/docs |
 | Health | http://localhost:8010/healthz |
 
-> Ports are non-default (5433 / 6380 / 8010 / 3010) so the stack can coexist with
-> other projects. Change them in `.env`.
+> Ports are non-default (5433 / 6380 / 8010 / 3010) so the stack can coexist with other projects. Change them in `.env`.
 
 ### With a local model instead of a hosted key
 
@@ -42,9 +55,7 @@ LLM_API_KEY=ollama
 LLM_MODEL=qwen2.5-coder:14b
 ```
 
-The LLM is an **enhancement, not a dependency**. Without one, the deterministic
-planner and rule-based reporter still produce a full test plan and a full audit
-result — only the free-text narration degrades.
+The LLM is an **enhancement, not a dependency**. Without one, the deterministic planner and rule-based reporter still produce a full test plan and a full audit result — only the free-text narration degrades.
 
 ---
 
@@ -52,38 +63,27 @@ result — only the free-text narration degrades.
 
 ```
 you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ──▶  draft test plan
-             (URLs, creds)  (sqlglot /   (schemas, columns,   (keys, nulls,
-                            ast / dbt)    row counts, types)   ranges, parity)
-                                                                │
-                                          you approve  ◀────────┘
-                                                │
-                                                ▼
-                                        run read-only probes ──▶ scored results + narrative
+              (URLs, creds)  (sqlglot /   (schemas, columns,   (keys, nulls,
+                             ast / dbt)    row counts, types)   ranges, parity)
+                                                                 │
+                                           you approve  ◀────────┘
+                                                 │
+                                                 ▼
+                                         run read-only probes ──▶ scored results + narrative
 ```
 
-1. **Intake** — paste a connection URL (`postgresql://user:pw@host:5432/db`), a JSON
-   spec, or loose `host=… port=… user=… password=…`. Credentials are stored as
-   secrets and never echoed back.
+### How it works, step by step
+
+1. **Intake** — paste a connection URL (`postgresql://user:pw@host:5432/db`), a JSON spec, or loose `host=… port=… user=… password=…`. Credentials are stored as secrets and never echoed back.
 2. **Parse** — the ETL is analysed deterministically:
-   - **SQL** (sqlglot): CTEs, joins, filters, aggregations, projections, casts,
-     unions → table-level lineage + risk flags (`SELECT *`, inner-join row loss,
-     `UNION ALL` duplicates, destructive DDL…).
-   - **Python** (AST): `read_sql` / `read_csv` / `to_sql` / `merge` / `groupby`
-     idioms, variable-level lineage, risks (`drop_duplicates`, `fillna`,
-     non-idempotent appends, `dropna` row loss).
-   - **dbt**: `manifest.json` lineage + declared tests, or `{{ ref() }}` /
-     `{{ source() }}` from raw model SQL.
-3. **Profile** — introspect each source (schemas, tables, columns, types, PKs,
-   row counts) and profile sampled columns.
-4. **Plan** — a deterministic baseline (keys → lineage parity → completeness →
-   validity → freshness → drift), augmented by the LLM. Thresholds are set from
-   *observed* null rates, not guesses.
+   - **SQL** (sqlglot): CTEs, joins, filters, aggregations, projections, casts, unions → table-level lineage + risk flags (`SELECT *`, inner-join row loss, `UNION ALL` duplicates, destructive DDL…).
+   - **Python** (AST): `read_sql` / `read_csv` / `to_sql` / `merge` / `groupby` idioms, variable-level lineage, risks (`drop_duplicates`, `fillna`, non-idempotent appends, `dropna` row loss).
+   - **dbt**: `manifest.json` lineage + declared tests, or `{{ ref() }}` / `{{ source() }}` from raw model SQL.
+3. **Profile** — introspect each source (schemas, tables, columns, types, PKs, row counts) and profile sampled columns.
+4. **Plan** — a deterministic baseline (keys → lineage parity → completeness → validity → freshness → drift), augmented by the LLM. Thresholds are set from *observed* null rates, not guesses.
 5. **Approve** — human-in-the-loop. Nothing touches your data until you click.
-6. **Execute** — each check compiles to a single aggregate `SELECT`, re-validated
-   as read-only immediately before running.
-7. **Report** — weighted quality score (0–100) broken down by severity, pass/fail
-   table, failing-row samples, and a narrative tying failures back to the
-   transformation that caused them.
+6. **Execute** — each check compiles to a single aggregate `SELECT`, re-validated as read-only immediately before running.
+7. **Report** — weighted quality score (0–100) broken down by severity, pass/fail table, failing-row samples, and a narrative tying failures back to the transformation that caused them.
 
 ---
 
@@ -100,8 +100,7 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
 | Databricks | SQL warehouse via `http_path` + token |
 | S3 / local CSV, JSON, Parquet | DuckDB-backed, treated as tables |
 
-Add another by subclassing `Connector` and registering it in
-`app/connectors/factory.py` — planning, execution and UI are source-agnostic.
+Add another by subclassing `Connector` and registering it in `api/app/connectors/factory.py` — planning, execution and UI are source-agnostic.
 
 ---
 
@@ -122,6 +121,7 @@ api/                     FastAPI + LangGraph backend
 web/                     Next.js 14 chat UI (standalone build)
 docs/                    ARCHITECTURE.md · TEST_STRATEGY.md
 examples/                demo SQL / Python / dbt manifest
+scripts/                 seed_demo.sh, docker-healthcheck.sh
 ```
 
 ---
@@ -141,17 +141,27 @@ curl -X POST localhost:8010/api/etl/analyze \
   -H 'content-type: application/json' \
   -d '{"language":"sql","code":"INSERT INTO analytics.rev SELECT id FROM raw.orders"}'
 
-# 3. draft a plan (returns run_id, status=awaiting_approval)
+# 3. analyse an ETL from a Git repo
+curl -X POST http://localhost:8010/api/etl/from-repo \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://github.com/acme/analytics","label":"my project"}'
+
+# 4. upload ETL files
+curl -X POST localhost:8010/api/etl/upload \
+  -F "files=@models/staging.sql" \
+  -F "files=@models/marts.sql"
+
+# 5. draft a plan (returns run_id, status=awaiting_approval)
 curl -X POST localhost:8010/api/runs/plan \
   -H 'content-type: application/json' \
   -d '{"connection_ids":["<conn_id>"],"etl_id":"<etl_id>"}'
 
-# 4. approve + execute
+# 6. approve + execute
 curl -X POST localhost:8010/api/runs/<run_id>/approve \
   -H 'content-type: application/json' \
   -d '{"connection_ids":["<conn_id>"]}'
 
-# 5. results / report / CSV export
+# 7. results / report / CSV export
 curl localhost:8010/api/runs/<run_id>
 curl localhost:8010/api/runs/<run_id>/report
 curl localhost:8010/api/runs/<run_id>/export
@@ -203,13 +213,14 @@ make clean    # stop and drop volumes
 
 ## Safety
 
-- All probes are single `SELECT`s, re-validated immediately before execution
-  (`assert_readonly`), and connections are opened read-only.
+- All probes are single `SELECT`s, re-validated immediately before execution (`assert_readonly`), and connections are opened read-only.
 - Credentials are `SecretStr`; `redacted()` is the only serialisation path.
 - Sample-row capture is capped (`RUN_MAX_ROW_SAMPLE`) and best-effort.
 - A failing check marks itself `error` — it never aborts the run or the others.
 
 You should still point the agent at a **read replica** rather than production.
+
+---
 
 ## Configuration
 
@@ -221,6 +232,8 @@ See `.env.example`. Key knobs:
 | `RUN_MAX_CHECKS` | 200 | cap on checks per run |
 | `RUN_MAX_ROW_SAMPLE` | 20 | sample rows captured per failure |
 | `CORS_ORIGINS` | `*` | restrict in production |
+| `RUN_MAX_CONCURRENCY` | 4 | concurrent checks per run |
+| `LLM_TEMPERATURE` | 0.1 | LLM temperature |
 
 ## License
 

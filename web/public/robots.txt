@@ -1,0 +1,8 @@
+# data-qualistest robots.txt
+
+User-agent: *
+Allow: /
+
+Disallow:
+
+Sitemap: https://qualitest.dev/sitemap.xml

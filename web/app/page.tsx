@@ -27,7 +27,13 @@ export default function ChatPage() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const sessionId = chat.sessionId;
 
-  const { ref, onScroll } = useAutoScroll([chat.messages.length, chat.pending, chat.plan, chat.question, run]);
+  const { ref, onScroll } = useAutoScroll([
+    chat.messages.length,
+    chat.pending,
+    chat.plan,
+    chat.question,
+    run,
+  ]);
 
   useEffect(() => {
     if (!runId) {
@@ -50,14 +56,15 @@ export default function ChatPage() {
     };
   }, [runId]);
 
-  // any new question from the agent clears stale form state
   useEffect(() => {
     setQStatus({ busy: false });
   }, [chat.question?.id]);
 
   const requirementTables = useCallback(() => {
     const key = chat.question?.requirement_key;
-    const req = key ? chat.analysis?.required_sources.find((r) => r.key === key) : undefined;
+    const req = key
+      ? chat.analysis?.required_sources.find((r) => r.key === key)
+      : undefined;
     if (!req) return { tables: [] as string[], targets: [] as string[] };
     const targetSet = new Set(chat.analysis?.targets ?? []);
     return {
@@ -89,7 +96,11 @@ export default function ChatPage() {
       setQStatus({ busy: true });
       try {
         const res = await api.uploadFiles(files, sessionId);
-        setQStatus({ busy: false, ok: `Read ${res.analysis.files.length} file(s).`, error: null });
+        setQStatus({
+          busy: false,
+          ok: `Read ${res.analysis.files.length} file(s).`,
+          error: null,
+        });
         chat.sendAction('etl_provided', { etl_id: res.analysis.id });
       } catch (e) {
         setQStatus({ busy: false, ok: null, error: (e as Error).message });
@@ -111,7 +122,11 @@ export default function ChatPage() {
           target_tables: targets,
         });
         if (!res.status.ok || !res.connection_id) {
-          setQStatus({ busy: false, ok: null, error: res.status.message ?? 'Connection failed.' });
+          setQStatus({
+            busy: false,
+            ok: null,
+            error: res.status.message ?? 'Connection failed.',
+          });
           return;
         }
         const note = res.unmatched_tables.length
@@ -144,13 +159,13 @@ export default function ChatPage() {
   const stageIdx = STAGES.findIndex((s) => s.key === chat.stage);
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-dvh flex-col" id="app">
       <Header connections={chat.connections.length} stageIdx={stageIdx} connected={chat.connected} onReset={chat.reset} />
 
       <main ref={ref} onScroll={onScroll} className="flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3.5 px-6 py-8">
           {empty && (
-            <div className="animate-fade-up pb-1 pt-4">
+            <section className="animate-fade-up pb-1 pt-4" aria-label="Welcome">
               <h2 className="text-balance text-[26px] font-semibold leading-tight tracking-tight">
                 Which codebase should I audit?
               </h2>
@@ -159,44 +174,50 @@ export default function ChatPage() {
                 for exactly those connections — nothing else. Credentials are stored as secrets and
                 never shown back.
               </p>
-            </div>
+            </section>
           )}
 
           {transcript.map((m) => (
-            <MessageBubble key={m.id} message={m} />
+            <article key={m.id} role="chat-message" aria-label={m.role}>
+              <MessageBubble key={m.id} message={m} />
+            </article>
           ))}
 
           {chat.question && (
-            <QuestionCard
-              question={chat.question}
-              status={qStatus}
-              onSubmitRepo={handleRepo}
-              onSubmitFiles={handleFiles}
-              onSubmitConnection={handleConnection}
-              onPaste={() => composerRef.current?.focus()}
-              onSkip={() => {
-                chat.sendAction('skip_question', { requirement_key: chat.question?.requirement_key });
-                setQStatus({ busy: false });
-              }}
-            />
+            <section aria-label="Agent question">
+              <QuestionCard
+                question={chat.question}
+                status={qStatus}
+                onSubmitRepo={handleRepo}
+                onSubmitFiles={handleFiles}
+                onSubmitConnection={handleConnection}
+                onPaste={() => composerRef.current?.focus()}
+                onSkip={() => {
+                  chat.sendAction('skip_question', { requirement_key: chat.question?.requirement_key });
+                  setQStatus({ busy: false });
+                }}
+              />
+            </section>
           )}
 
           {showPlan && (
-            <PlanCard
-              runId={chat.planRunId ?? ''}
-              checks={chat.plan ?? []}
-              progress={chat.progress}
-              running={Object.keys(chat.progress).length > 0}
-              onApprove={() => chat.send('run the tests', 'approve')}
-              onRegenerate={() => chat.send('regenerate the plan with different thresholds')}
-            />
+            <section aria-label="Test plan">
+              <PlanCard
+                runId={chat.planRunId ?? ''}
+                checks={chat.plan ?? []}
+                progress={chat.progress}
+                running={Object.keys(chat.progress).length > 0}
+                onApprove={() => chat.send('run the tests', 'approve')}
+                onRegenerate={() => chat.send('regenerate the plan with different thresholds')}
+              />
+            </section>
           )}
 
           {chat.pending && <TypingIndicator />}
 
-          {showResults && run && <ResultsCard run={run} />}
+          {showResults && run && <section aria-label="Run results"><ResultsCard run={run} /></section>}
 
-          {showResults && (
+          {showResults && run && (
             <div className="px-1 text-[11.5px] text-muted">
               Ask a follow-up — <em>&ldquo;why did the foreign key check fail?&rdquo;</em> or{' '}
               <em>&ldquo;add a uniqueness check on customer_id&rdquo;</em>.
@@ -230,7 +251,8 @@ export default function ChatPage() {
 
 function composerPlaceholder(stage: string, hasQuestion: boolean) {
   if (stage === 'need_etl') return 'Paste your ETL script here…';
-  if (stage === 'need_sources' && hasQuestion) return 'Or use the form above — paste a connection URL here too…';
+  if (stage === 'need_sources' && hasQuestion)
+    return 'Or paste a connection URL directly, like postgresql://user:password@host:5432/db';
   if (stage === 'awaiting_approval') return 'Ask for changes, or say "run the tests"…';
   if (stage === 'done') return 'Ask about a failure, or request more checks…';
   return 'Message the agent…';
@@ -273,7 +295,9 @@ function Header({
           ))}
         </ol>
         {connections > 0 && (
-          <span className="hidden chip bg-pass/10 text-pass sm:inline-flex">{connections} connected</span>
+          <span className="hidden chip bg-pass/10 text-pass sm:inline-flex">
+            {connections} connected
+          </span>
         )}
         <span
           className={cn('h-2 w-2 rounded-full', connected ? 'bg-pass' : 'bg-muted/40')}
