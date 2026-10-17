@@ -2,11 +2,20 @@
  * Client-side mirror of `app/services/source_filter.py`.
  *
  * A project folder routinely contains thousands of irrelevant files (.git
- * objects, node_modules, parquet blobs, images). Filtering here means the user
- * sees the real selection *before* uploading, and we never push 500 MB of junk
- * across the wire only for the server to discard it. The lists below must stay
- * aligned with the backend — the backend still filters independently, so a
+ * objects, node_modules, lock files, parquet blobs). Filtering here means the
+ * user sees the real selection *before* uploading, and we never push 500 MB of
+ * junk across the wire only for the server to discard it. The lists below must
+ * stay aligned with the backend — the backend still filters independently, so a
  * drift here degrades UX but never correctness.
+ *
+ * Three destinations, mirroring the server:
+ *   code   — parsed for lineage
+ *   data   — profiled (columns, row count); the rows never leave the server
+ *   skip   — irrelevant
+ *
+ * The one thing a browser cannot cheaply do is read file bodies, so the
+ * content-dependent decisions (is this JSON config or a data export? is this
+ * SQL minified?) happen server-side only.
  */
 
 const SKIP_DIRS = new Set([
@@ -16,19 +25,32 @@ const SKIP_DIRS = new Set([
   '.ipynb_checkpoints',
 ]);
 
-const INCLUDE_EXT = new Set([
-  '.sql', '.py', '.yml', '.yaml', '.json', '.txt', '.ddl', '.j2', '.jinja',
+const CODE_EXT = new Set(['.sql', '.py', '.ddl', '.j2', '.jinja']);
+const CONFIG_EXT = new Set(['.yml', '.yaml']);
+const DATA_EXT = new Set(['.csv', '.tsv', '.jsonl', '.ndjson', '.parquet']);
+
+const CONFIG_NAMES = new Set([
+  'dbt_project.yml', 'profiles.yml', 'packages.yml', 'selectors.yml',
+  'dbt_packages.yml',
 ]);
 
-const INCLUDE_NAMES = new Set([
-  'dbt_project.yml', 'profiles.yml', 'packages.yml', 'selectors.yml', 'manifest.json',
+const JUNK_NAMES = new Set([
+  'package-lock.json', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
+  'yarn.lock', 'bun.lock', 'bun.lockb', 'poetry.lock', 'pipfile.lock',
+  'uv.lock', 'conda-lock.yml', 'composer.lock', 'gemfile.lock',
+  'catalog.json', 'run_results.json', 'semgrep.lock', '.ds_store',
 ]);
-
-export const MAX_FILES = 400;
-export const MAX_FILE_BYTES = 256_000;
 
 /** Keep dbt's compiled artifacts out; only the manifest from target/ matters. */
 const TARGET_KEEP = new Set(['manifest.json']);
+
+export const MAX_FILES = 400;
+export const MAX_DATA_BYTES = 8_000_000;
+export const MAX_DATA_FILES = 50;
+/** A JSON config worth reading is small; bigger means export (server mirrors this). */
+export const JSON_CONFIG_MAX_BYTES = 32_000;
+
+export type Kind = 'code' | 'data' | 'skip';
 
 export type NamedFile = {
   file: File;
@@ -36,10 +58,19 @@ export type NamedFile = {
   path: string;
 };
 
+/**
+ * `folder` = a directory pick or drop (strict filtering, junk is expected);
+ * `files` = the user named individual files, so they are taken at face value.
+ */
+export type UploadMode = 'folder' | 'files';
+
 export type FileSelection = {
   files: NamedFile[];
+  mode: UploadMode;
   totalSeen: number;
   skipped: number;
+  dataFiles: number;
+  codeFiles: number;
 };
 
 export function relPath(file: File): string {
@@ -54,8 +85,10 @@ function extOf(name: string): string {
 }
 
 export function isSeedCsv(path: string): boolean {
-  const norm = path.toLowerCase();
-  return extOf(norm) === '.csv' && /(^|\/)seeds?\//.test(norm);
+  const parts = path.toLowerCase().replace(/\\/g, '/').split('/');
+  const name = parts[parts.length - 1];
+  if (extOf(name) !== '.csv') return false;
+  return parts.slice(0, -1).includes('seeds') || name.startsWith('seed_');
 }
 
 function underSkipDir(parts: string[]): boolean {
@@ -63,30 +96,59 @@ function underSkipDir(parts: string[]): boolean {
 }
 
 /** Mirror of the backend `classify()` for the data a browser has (size, path). */
-export function isRelevant(nf: NamedFile): boolean {
+export function classify(nf: NamedFile, mode: UploadMode = 'folder'): Kind {
   const norm = nf.path.replace(/\\/g, '/').replace(/^(\.\/)+/, '');
   const parts = norm.split('/');
   const name = parts[parts.length - 1];
+  const low = name.toLowerCase();
+  const ext = extOf(low);
 
-  if (isSeedCsv(norm)) return true; // name is data; body is skipped server-side
-  if (underSkipDir(parts)) return false;
+  if (underSkipDir(parts)) return 'skip';
   // dbt's target/ may sit below the project dir; only its manifest counts
   const ti = parts.slice(0, -1).indexOf('target');
   if (ti >= 0) {
     const under = parts.slice(ti + 1);
-    if (!(under.length === 1 && TARGET_KEEP.has(under[0]))) return false;
+    if (!(under.length === 1 && TARGET_KEEP.has(under[0]))) return 'skip';
   }
-  if (!INCLUDE_EXT.has(extOf(name)) && !INCLUDE_NAMES.has(name)) return false;
-  if (ti >= 0 && name === 'manifest.json') return nf.file.size <= 4_000_000;
-  return nf.file.size <= MAX_FILE_BYTES;
+
+  if (mode === 'files') {
+    // a deliberate pick is a deliberate pick: only size caps still apply
+    return nf.file.size <= MAX_DATA_BYTES ? 'code' : 'skip';
+  }
+
+  if (JUNK_NAMES.has(low)) return 'skip';
+  if (CODE_EXT.has(ext) || CONFIG_EXT.has(ext) || CONFIG_NAMES.has(low)) return 'code';
+  if (DATA_EXT.has(ext)) {
+    return nf.file.size <= MAX_DATA_BYTES ? 'data' : 'skip';
+  }
+  if (ext === '.json') {
+    if (TARGET_KEEP.has(low) && ti >= 0) {
+      return nf.file.size <= 4_000_000 ? 'code' : 'skip';
+    }
+    // too big to be config: treat it as a data export. The server still reads
+    // the body to be certain, but the count the user sees stays close.
+    return nf.file.size <= JSON_CONFIG_MAX_BYTES ? 'code' : 'data';
+  }
+  if (TARGET_KEEP.has(low)) return nf.file.size <= 4_000_000 ? 'code' : 'skip';
+  return 'skip';
 }
 
-export function filterUpload(items: NamedFile[]): FileSelection {
-  const files = items.filter(isRelevant).slice(0, MAX_FILES);
+export function filterUpload(items: NamedFile[], mode: UploadMode = 'folder'): FileSelection {
+  const dataFiles: NamedFile[] = [];
+  const codeFiles: NamedFile[] = [];
+  for (const nf of items) {
+    const kind = classify(nf, mode);
+    if (kind === 'data') dataFiles.push(nf);
+    else if (kind === 'code') codeFiles.push(nf);
+  }
+  const files = [...codeFiles.slice(0, MAX_FILES), ...dataFiles.slice(0, MAX_DATA_FILES)];
   return {
     files,
+    mode,
     totalSeen: items.length,
     skipped: items.length - files.length,
+    dataFiles: dataFiles.length,
+    codeFiles: Math.min(codeFiles.length, MAX_FILES),
   };
 }
 
@@ -144,9 +206,11 @@ export async function fromDataTransfer(dt: DataTransfer): Promise<NamedFile[]> {
   return fromFileList(dt.files); // plain-files drop / browsers without the entry API
 }
 
-/** Human summary for the upload card, e.g. "34 relevant of 12,000 (11,966 skipped)". */
+/** Human summary for the upload card: "34 files · 3 data files profiled of 12,000". */
 export function describeSelection(sel: FileSelection): string {
-  const kept = sel.files.length;
-  if (sel.totalSeen === kept) return `${kept} file${kept === 1 ? '' : 's'} selected`;
-  return `${kept} relevant file${kept === 1 ? '' : 's'} of ${sel.totalSeen.toLocaleString()} selected (${(sel.totalSeen - kept).toLocaleString()} skipped)`;
+  const { codeFiles, dataFiles, totalSeen } = sel;
+  const bits = [`${codeFiles} code/config file${codeFiles === 1 ? '' : 's'}`];
+  if (dataFiles > 0) bits.push(`${dataFiles} data file${dataFiles === 1 ? '' : 's'} to profile`);
+  if (totalSeen === sel.files.length) return bits.join(' + ');
+  return `${bits.join(' + ')} of ${totalSeen.toLocaleString()} (${(totalSeen - sel.files.length).toLocaleString()} skipped)`;
 }

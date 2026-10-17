@@ -143,11 +143,54 @@ class EtlLanguage(StrEnum):
     DBT = "dbt"
 
 
+class ColumnProfile(BaseModel):
+    """One column as seen in a data file (inferred, not introspected)."""
+
+    name: str
+    data_type: str = "string"
+    # null_ratio is measured over the sampled rows, not the whole file
+    null_ratio: float | None = None
+    distinct_values: int | None = None
+    samples: list[str] = Field(default_factory=list)
+
+
+class DataProfile(BaseModel):
+    """Column-level metadata for a data file the user handed us.
+
+    The file's rows never enter the analysis: only this profile does. That is
+    what lets a 40 MB seed CSV cost a few KB of context instead of a context
+    window, while still telling us the table exists and what it looks like.
+    """
+
+    path: str
+    table: str
+    format: str = "csv"
+    row_count: int | None = None
+    sampled_rows: int = 0
+    size_bytes: int = 0
+    columns: list[ColumnProfile] = Field(default_factory=list)
+    truncated: bool = False
+    note: str | None = None
+
+    def column_names(self) -> list[str]:
+        return [c.name for c in self.columns]
+
+    def describe(self) -> str:
+        """One clause for chat: `raw_customers.csv — 120 rows, id:integer, name:text`."""
+        cols = ", ".join(f"{c.name}:{c.data_type}" for c in self.columns[:4])
+        more = f" +{len(self.columns) - 4} more" if len(self.columns) > 4 else ""
+        head = f"{self.path} — "
+        if self.row_count is None:
+            return f"{head}{len(self.columns)} column(s){more}"
+        return f"{head}{self.row_count:,} row(s), {cols}{more}"
+
+
 class EtlSubmit(BaseModel):
     language: EtlLanguage = EtlLanguage.SQL
     code: str | None = None
     files: dict[str, str] = Field(default_factory=dict)
     manifest: dict[str, Any] | None = None
+    data_profiles: list[DataProfile] = Field(default_factory=list)
     label: str | None = None
     # provenance
     origin: str | None = None
@@ -239,6 +282,8 @@ class EtlAnalysis(BaseModel):
     connection_hints: list[dict[str, Any]] = Field(default_factory=list)
     # per-table metadata ({database, schema, engine}) that survives parsing
     table_hints: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # column metadata for data files (seeds, CSV drops, JSON/parquet exports)
+    data_profiles: list[DataProfile] = Field(default_factory=list)
     required_sources: list[SourceRequirement] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=now)
 

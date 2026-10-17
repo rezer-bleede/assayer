@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     # common case), but cloud metadata + loopback are always refused.
     repo_allow_private_hosts: bool = True
 
+    # --- source intake (folder upload + git clone share these) ---
+    # Code/config we are willing to read: a model above this is generated or
+    # machine-written and carries no readable lineage.
+    intake_code_max_bytes: int = 131_072
+    # Data files are profiled, not read as source, so they get their own cap —
+    # a seed CSV is expected to be far larger than a dbt model.
+    intake_data_max_bytes: int = 8_000_000
+    intake_data_max_files: int = 50
+    intake_total_max_bytes: int = 4_000_000
+
     @field_validator("llm_base_url", mode="before")
     @classmethod
     def _blank_to_none(cls, v: object) -> object:

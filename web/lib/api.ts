@@ -56,6 +56,9 @@ export const api = {
     // Relative paths travel separately: multipart `filename` is basename-only,
     // while models/seeds/profiles detection needs the folder structure.
     form.append('paths', JSON.stringify(sel.files.map(({ path }) => path)));
+    // A folder pick gets strict filtering (junk is expected); files the user
+    // named by hand are taken at face value.
+    form.append('mode', sel.mode);
     const res = await fetch(
       `${API_URL}/api/etl/upload${session_id ? `?session_id=${encodeURIComponent(session_id)}` : ''}`,
       { method: 'POST', body: form },
@@ -162,7 +165,27 @@ export type EtlAnalysis = {
   targets: string[];
   transformations: { kind: string; description: string }[];
   risks: string[];
+  data_profiles?: DataProfile[];
   required_sources: SourceRequirement[];
+};
+
+/** Column metadata for a data file we profiled (rows never leave the server). */
+export type DataProfile = {
+  path: string;
+  table: string;
+  format: string;
+  row_count: number | null;
+  sampled_rows: number;
+  size_bytes: number;
+  columns: {
+    name: string;
+    data_type: string;
+    null_ratio: number | null;
+    distinct_values: number | null;
+    samples: string[];
+  }[];
+  truncated: boolean;
+  note: string | null;
 };
 
 export type SourceKind = { type: string; label: string };

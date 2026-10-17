@@ -48,6 +48,7 @@ from app.schemas import (
 )
 from app.services.ingest import extract_connections, looks_like_code
 from app.services.orchestrator import build_bindings, introspect_all, profile_focus, run_audit
+from app.services.source_filter import profile_summary
 from app.store import repository as repo
 from app.store.db import utcnow_str
 
@@ -277,6 +278,13 @@ def _etl_payload(analysis: EtlAnalysis) -> dict[str, Any]:
             {"kind": t.kind, "description": t.description} for t in analysis.transformations[:20]
         ],
         "risks": analysis.risks,
+        "data_profiles": [
+            {
+                **p.model_dump(mode="json"),
+                "columns": p.columns[:20],
+            }
+            for p in analysis.data_profiles[:20]
+        ],
         "required_sources": [r.model_dump(mode="json") for r in analysis.required_sources],
     }
 
@@ -301,11 +309,15 @@ async def handle_turn(
             ctx["etl_id"] = analysis.id
             ctx["requirements"] = [r.model_dump(mode="json") for r in analysis.required_sources]
             emit("etl.analyzed", _etl_payload(analysis))
-            notes.append(
+            note = (
                 f"Parsed {analysis.label or 'the codebase'} as {analysis.language}: "
                 f"{len(analysis.files)} file(s), {len(analysis.sources)} source table(s), "
                 f"{len(analysis.targets)} target(s)."
             )
+            profiled = profile_summary(analysis.data_profiles)
+            if profiled:
+                note = f"{note} {profiled}"
+            notes.append(note)
 
     if action == "connection_provided" and payload.get("connection_id"):
         cid = payload["connection_id"]

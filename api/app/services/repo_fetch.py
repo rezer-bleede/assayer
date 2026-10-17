@@ -33,10 +33,12 @@ from urllib.parse import urlsplit, urlunsplit
 
 from app.core.config import settings
 from app.core.logging import log
-from app.services.source_filter import Skip, classify, is_seed_csv
+from app.schemas import DataProfile
+from app.services.profile import profile_file
+from app.services.source_filter import Kind, classify, is_seed_csv, sniff_text
 
 _CRED_RE = re.compile(
-    r"(?P<scheme>[a-zA-Z][\w+.-]*)://(?P<user>[^:/@\s]+)(?::(?P<secretp>[^@/\s]+))?@"
+    r"(?P<scheme>[a-zA-Z][\w+.-]*)://(?P<user>[^:/@\s]+)(?::(?P<secretp>[^@\s]+))?@"
 )
 
 # a manifest can be huge; models are the interesting part
@@ -51,6 +53,7 @@ class RepoError(ValueError):
 class RepoContent:
     files: dict[str, str] = field(default_factory=dict)
     manifest: dict | None = None
+    data_profiles: list[DataProfile] = field(default_factory=list)
     repo_url: str | None = None
     ref: str | None = None
     commits: int = 0
@@ -179,15 +182,20 @@ def _run_clone(
         _refuse(f"git clone failed: {err}.{hint}")
 
 
-def collect(dirpath: Path, warnings: list[str]) -> tuple[dict[str, str], dict | None]:
+def collect(
+    dirpath: Path, warnings: list[str]
+) -> tuple[dict[str, str], dict | None, list[DataProfile]]:
     """Walk the clone for readable source, honouring size/count caps.
 
     Relevance itself is decided by `source_filter.classify` so a cloned repo
-    and an uploaded folder are filtered by exactly the same rules.
+    and an uploaded folder are filtered by exactly the same rules; data files
+    are profiled rather than read.
     """
     files: dict[str, str] = {}
     manifest: dict | None = None
+    profiles: list[DataProfile] = []
     total = 0
+    unprofiled = 0
 
     for path in sorted(dirpath.rglob("*")):
         if not path.is_file():
@@ -195,28 +203,44 @@ def collect(dirpath: Path, warnings: list[str]) -> tuple[dict[str, str], dict | 
         rel = path.relative_to(dirpath).as_posix()
         size = path.stat().st_size
 
-        # seed CSVs tell us a table exists; their contents never affect lineage,
-        # so register the name only and skip the (potentially large) read
-        if is_seed_csv(rel):
-            files.setdefault(rel, "")
-            continue
-
         verdict = classify(
             rel,
             size=size,
-            max_file_bytes=settings.repo_max_file_bytes,
+            max_file_bytes=settings.intake_code_max_bytes,
             manifest_max_bytes=_MAX_MANIFEST_BYTES,
+            data_max_bytes=settings.intake_data_max_bytes,
         )
-        if verdict is Skip.SIZE and rel.endswith("manifest.json"):
-            warnings.append(f"skipped oversized manifest at {rel}")
+        if verdict.kind is Kind.SKIP:
+            if rel.endswith("manifest.json"):
+                warnings.append(f"skipped oversized manifest at {rel}")
             continue
-        if verdict is not Skip.KEEP:
+
+        # seed CSVs tell us a table exists; their contents never affect lineage,
+        # so register the name only and profile the columns instead
+        if is_seed_csv(rel):
+            files.setdefault(rel, "")
+
+        if verdict.kind is Kind.DATA:
+            if size > settings.intake_data_max_bytes:
+                warnings.append(f"skipped {rel} ({size:,} bytes > data cap)")
+                continue
+            if len(profiles) >= settings.intake_data_max_files:
+                unprofiled += 1
+                continue
+            try:
+                profile = profile_file(rel, path.read_bytes())
+            except OSError as exc:
+                warnings.append(f"could not read {rel}: {scrub(str(exc))}")
+                continue
+            if profile is not None:
+                profiles.append(profile)
             continue
+
         if len(files) >= settings.repo_max_files:
             warnings.append(f"stopped at {settings.repo_max_files} files; the repo is larger")
             break
         if size > _MAX_MANIFEST_BYTES or (
-            size > settings.repo_max_file_bytes and not rel.endswith("manifest.json")
+            size > settings.intake_code_max_bytes and not rel.endswith("manifest.json")
         ):
             warnings.append(f"skipped {rel} ({size:,} bytes > cap)")
             continue
@@ -226,21 +250,30 @@ def collect(dirpath: Path, warnings: list[str]) -> tuple[dict[str, str], dict | 
             warnings.append(f"could not read {rel}: {scrub(str(exc))}")
             continue
 
+        resolved = sniff_text(rel, text)
+        if resolved.kind is Kind.SKIP:
+            continue
+
         total += len(text)
-        if total > settings.repo_max_total_bytes:
-            warnings.append(f"stopped at the {settings.repo_max_total_bytes:,} byte source cap")
+        if total > settings.intake_total_max_bytes:
+            warnings.append(f"stopped at the {settings.intake_total_max_bytes:,} byte source cap")
             break
 
         files[rel] = text
-        if path.name == "manifest.json" and manifest is None:
+        if manifest is None and path.name == "manifest.json":
             with contextlib.suppress(Exception):
                 parsed = json.loads(text)
                 if isinstance(parsed, dict) and "nodes" in parsed:
                     manifest = parsed
 
+    if unprofiled:
+        warnings.append(
+            f"{unprofiled} further data file(s) not profiled "
+            f"(cap {settings.intake_data_max_files})"
+        )
     if not files:
         _refuse("No .sql / .py / .yml source files found in that repository.")
-    return files, manifest
+    return files, manifest, profiles
 
 
 def fetch(
@@ -270,12 +303,13 @@ def fetch(
         with contextlib.suppress(Exception):
             shutil.rmtree(target / ".git")
 
-        files, manifest = collect(target, warnings)
+        files, manifest, profiles = collect(target, warnings)
         commits = 1
         log.info("repo cloned", url=scrub(safe_url), files=len(files), warnings=len(warnings))
         return RepoContent(
             files=files,
             manifest=manifest,
+            data_profiles=profiles,
             repo_url=scrub(safe_url),
             ref=ref,
             commits=commits,

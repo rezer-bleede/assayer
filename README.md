@@ -74,7 +74,14 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
 
 ### How it works, step by step
 
-1. **Intake** — paste a connection URL (`postgresql://user:pw@host:5432/db`), a JSON spec, or loose `host=… port=… user=… password=…`. Credentials are stored as secrets and never echoed back.
+1. **Intake** — a git URL, a pasted script, or a folder of files. Every file is routed before it is read:
+   - **code / config** (`.sql`, `.py`, `.ddl`, `.j2`, dbt YAML, `manifest.json`) → parsed for lineage;
+   - **data** (`.csv`, `.tsv`, `.jsonl`, `.parquet`, JSON arrays) → *profiled* into columns, types, row counts and sample values. The rows never enter the analysis, so a 40 MB seed costs kilobytes of context;
+   - **skipped** — VCS/dependency directories, binaries, lock files (`package-lock.json`, `poetry.lock`…), `.txt`, dbt `target/` artifacts other than the manifest, minified files and `.sql` files that are really bulk `INSERT` dumps.
+
+   A seed CSV that resolves to a live table later adds a **contract check**: any column the file promises but the warehouse lacks is real drift. Uploads can also be sent as `mode=files`, where the user's explicit selection overrides the classification (binaries and hard size caps still apply).
+
+   Connections are pasted as a URL (`postgresql://user:pw@host:5432/db`), a JSON spec, or loose `host=… port=… user=… password=…`. Credentials are stored as secrets and never echoed back.
 2. **Parse** — the ETL is analysed deterministically:
    - **SQL** (sqlglot): CTEs, joins, filters, aggregations, projections, casts, unions → table-level lineage + risk flags (`SELECT *`, inner-join row loss, `UNION ALL` duplicates, destructive DDL…).
    - **Python** (AST): `read_sql` / `read_csv` / `to_sql` / `merge` / `groupby` idioms, variable-level lineage, risks (`drop_duplicates`, `fillna`, non-idempotent appends, `dropna` row loss).
@@ -146,10 +153,14 @@ curl -X POST http://localhost:8010/api/etl/from-repo \
   -H 'content-type: application/json' \
   -d '{"url":"https://github.com/acme/analytics","label":"my project"}'
 
-# 4. upload ETL files
+# 4. upload a project folder (or individual files)
+#    mode=folder -> strict filtering: junk is expected, data files are profiled
+#    mode=files  -> the user named them, so they are taken at face value
 curl -X POST localhost:8010/api/etl/upload \
-  -F "files=@models/staging.sql" \
-  -F "files=@models/marts.sql"
+  -F "mode=folder" \
+  -F "files=@shop/models/staging.sql" \
+  -F "files=@shop/seeds/raw_customers.csv" \
+  -F 'paths=["shop/models/staging.sql","shop/seeds/raw_customers.csv"]'
 
 # 5. draft a plan (returns run_id, status=awaiting_approval)
 curl -X POST localhost:8010/api/runs/plan \
@@ -233,6 +244,9 @@ See `.env.example`. Key knobs:
 | `RUN_MAX_ROW_SAMPLE` | 20 | sample rows captured per failure |
 | `CORS_ORIGINS` | `*` | restrict in production |
 | `RUN_MAX_CONCURRENCY` | 4 | concurrent checks per run |
+| `INTAKE_CODE_MAX_BYTES` | 131072 | per-file cap for code/config that gets parsed |
+| `INTAKE_DATA_MAX_BYTES` | 8000000 | per-file cap for data files that get profiled |
+| `INTAKE_TOTAL_MAX_BYTES` | 4000000 | total source text kept for lineage |
 | `LLM_TEMPERATURE` | 0.1 | LLM temperature |
 
 ## License

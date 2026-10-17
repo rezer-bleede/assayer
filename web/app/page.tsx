@@ -97,9 +97,20 @@ export default function ChatPage() {
       setQStatus({ busy: true });
       try {
         const res = await api.uploadFiles(sel, sessionId);
+        const profiles = res.analysis.data_profiles ?? [];
+        const profiled =
+          profiles.length > 0
+            ? ` Profiled ${profiles.length} data file(s): ` +
+              profiles
+                .slice(0, 2)
+                .map((p) => `${p.path} (${(p.row_count ?? 0).toLocaleString()} rows)`)
+                .join(', ') +
+              (profiles.length > 2 ? '…' : '') +
+              '.'
+            : '';
         setQStatus({
           busy: false,
-          ok: `Read ${res.analysis.files.length} file(s).`,
+          ok: `Read ${res.analysis.files.length} file(s).${profiled}`,
           error: null,
         });
         chat.sendAction('etl_provided', { etl_id: res.analysis.id });

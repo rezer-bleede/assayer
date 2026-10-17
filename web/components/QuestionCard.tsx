@@ -145,7 +145,7 @@ export function QuestionCard({
               e.preventDefault();
               setDragging(false);
               const items = await fromDataTransfer(e.dataTransfer);
-              setSel(filterUpload(items));
+              setSel(filterUpload(items, 'folder'));
             }}
             className={cn(
               'rounded-xl border border-dashed px-4 py-6 text-center transition-colors',
@@ -153,10 +153,12 @@ export function QuestionCard({
             )}
           >
             <p className="text-[13px] text-muted">
-              Select or drop your <b>project folder</b> — I read only the ETL-relevant
-              files (<code className="font-mono">.sql</code>,{' '}
-              <code className="font-mono">.py</code>, dbt YAML/JSON) and skip git
-              metadata, dependencies and binaries.
+              Select or drop your <b>project folder</b>. I read the transformation code and
+              config (<code className="font-mono">.sql</code>,{' '}
+              <code className="font-mono">.py</code>, dbt YAML + manifest) for lineage, and{' '}
+              <b>profile</b> your data files (CSV, JSON, parquet: columns, types, row count)
+              instead of loading them. Dependencies, lock files, binaries and generated
+              artifacts are skipped.
             </p>
             <div className="mt-3 flex items-center justify-center gap-2">
               <button type="button" className="btn-primary" onClick={() => dirRef.current?.click()}>
@@ -171,7 +173,7 @@ export function QuestionCard({
               type="file"
               multiple
               className="hidden"
-              onChange={(e) => setSel(filterUpload(fromFileList(e.target.files ?? [])))}
+              onChange={(e) => setSel(filterUpload(fromFileList(e.target.files ?? []), 'folder'))}
               {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
             />
             <input
@@ -179,12 +181,17 @@ export function QuestionCard({
               type="file"
               multiple
               className="hidden"
-              accept=".sql,.py,.yml,.yaml,.json,.txt,.ddl,.j2,.jinja"
-              onChange={(e) => setSel(filterUpload(fromFileList(e.target.files ?? [])))}
+              accept=".sql,.py,.yml,.yaml,.json,.ddl,.j2,.jinja,.csv,.tsv,.jsonl,.parquet"
+              onChange={(e) => setSel(filterUpload(fromFileList(e.target.files ?? []), 'files'))}
             />
             {sel && (
               <div className="mx-auto mt-3 max-w-md text-left">
                 <p className="text-[12px] font-medium text-pass">{describeSelection(sel)}</p>
+                {sel.dataFiles > 0 && (
+                  <p className="mt-0.5 text-[11.5px] text-muted">
+                    Data files are profiled (schema + row count), not read into the analysis.
+                  </p>
+                )}
                 <ul className="mt-1 space-y-0.5">
                   {sel.files.slice(0, 8).map((nf) => (
                     <li key={nf.path} className="truncate font-mono text-[11.5px] text-muted">

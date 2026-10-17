@@ -151,3 +151,46 @@ def test_analysis_risks_are_surfaced(risk_text: str) -> None:
         EtlSubmit(language="sql", code=f"INSERT INTO t SELECT * FROM s {risk_text} s2 ON s.a=s2.a")
     )
     assert a.risks
+
+# --- file -> warehouse contract (data profiles) ----------------------------- #
+
+
+def _analysis_with_profile(*columns: str) -> EtlAnalysis:
+    from app.schemas import ColumnProfile, DataProfile
+
+    return EtlAnalysis(
+        language="dbt",
+        sources=["raw_customers"],
+        targets=["daily_revenue"],
+        data_profiles=[
+            DataProfile(
+                path="shop/seeds/raw_customers.csv",
+                table="raw_customers",
+                format="csv",
+                row_count=100,
+                columns=[ColumnProfile(name=c, data_type="string") for c in columns],
+            )
+        ],
+    )
+
+
+def test_contract_check_flags_columns_the_live_table_lost() -> None:
+    analysis = _analysis_with_profile("id", "email", "lifetime_value")
+    checks = plan_checks(analysis, [_binding(table="raw_customers", columns=["id", "email"])])
+    contract = [c for c in checks if str(c.kind) == "schema"]
+    assert len(contract) == 1
+    assert contract[0].severity == Severity.WARNING
+    assert contract[0].params["expected_columns"] == ["email", "id", "lifetime_value"]
+    assert "lifetime_value" in contract[0].rationale
+
+
+def test_no_contract_check_when_the_table_matches_the_file() -> None:
+    analysis = _analysis_with_profile("id", "email")
+    checks = plan_checks(analysis, [_binding(table="raw_customers", columns=["id", "email"])])
+    assert [c for c in checks if str(c.kind) == "schema"] == []
+
+
+def test_no_contract_check_without_a_matching_file() -> None:
+    analysis = _analysis_with_profile("id", "email", "lifetime_value")
+    checks = plan_checks(analysis, [_binding()])
+    assert [c for c in checks if str(c.kind) == "schema"] == []

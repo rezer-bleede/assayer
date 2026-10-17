@@ -439,6 +439,36 @@ def plan_checks(
             )
         )
 
+    # --- 8. file -> warehouse contract ----------------------------------- #
+    # A data file the user handed us (a dbt seed, a CSV drop) promises a set of
+    # columns. If that name also resolves to a live table, a column promised by
+    # the file but absent from the table is real drift: the pipeline can pass
+    # today and break the next time the file is re-uploaded.
+    file_profiles = {p.table: p for p in (analysis.data_profiles if analysis else [])}
+    for b in bindings:
+        file_prof = file_profiles.get(b.table) or file_profiles.get(f"seed_{b.table}")
+        live = {c.lower() for c in _columns(b)}
+        if file_prof is None or not live:
+            continue
+        promised = [c for c in file_prof.column_names() if c.lower() not in live]
+        if not promised:
+            continue
+        checks.append(
+            CheckSpec(
+                name=f"[{b.table}] columns promised by {file_prof.path} exist in the database",
+                kind=CheckKind.SCHEMA,
+                table=_table_ref(b),
+                severity=Severity.WARNING,
+                params={"expected_columns": sorted(file_prof.column_names())},
+                rationale=(
+                    f"{len(promised)} column(s) in {file_prof.path} "
+                    f"({', '.join(promised[:5])}) are not in the live table — "
+                    "the file and the warehouse disagree"
+                ),
+                tags=["contract", "schema"],
+            )
+        )
+
     # De-dup identical probes. Tags are part of the key on purpose: the baseline
     # "table is queryable" row-count check and the source->target parity check
     # probe the same table but answer different questions.

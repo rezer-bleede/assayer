@@ -45,9 +45,31 @@ make test          # pytest inside the api container
 - `test_ingest.py` — URL/credential/JSON extraction, redaction, language detection.
 - `test_parsers.py` — SQL lineage, CTE/join/filter/agg detection, risk flags;
   Python AST sinks and sources; dbt manifest + `ref()`/`source()` extraction.
-- `test_planner.py` — baseline coverage, dedup, determinism, parity checks.
+- `test_planner.py` — baseline coverage, dedup, determinism, parity checks, and
+  the file-to-warehouse contract check driven by data profiles.
+- `test_source_filter.py` — intake routing shared by git and upload: what is
+  code, what is data, what is junk, plus the generated/`.sql`-dump sniffs, the
+  aggregate budget and `mode=files` trust.
+- `test_profile.py` — data-file profiling: CSV/TSV/JSON/NDJSON types, null
+  ratios, distinct counts, exact row counts beyond the sample window, parquet
+  via duckdb, and truncated scans being flagged rather than hidden.
+- `test_intake_upload.py` — the upload route end to end: routing, profiling,
+  the note the user sees, and trust mode.
 - `test_runner.py` — end-to-end run against an in-memory fake connector:
   correct pass/fail classification, scoring, event emission, unsafe-SQL rejection.
+
+## Intake policy (upload and git clone share it)
+
+Each file is routed before its bytes are used:
+
+| Route | Formats | What happens |
+| --- | --- | --- |
+| code / config | `.sql` `.py` `.ddl` `.j2` `.jinja` `.yml` `.yaml`, small config JSON, `target/manifest.json` | parsed into lineage (cap `INTAKE_CODE_MAX_BYTES`) |
+| data | `.csv` `.tsv` `.jsonl` `.parquet`, JSON arrays | profiled: columns, inferred types, null ratio, distinct counts, exact row count. **Rows never enter the analysis.** |
+| skip | VCS/dependency dirs, binaries, lock files, `.txt`, `target/` artifacts, minified files, `.sql` bulk-INSERT dumps | counted in the note the user sees |
+
+`mode=files` (the user named individual files) skips the classification:
+everything textual is read, and only binaries and hard size caps still apply.
 
 ## Verifying manually
 
@@ -76,3 +98,5 @@ These were real bugs found during integration, each now pinned by a test:
 - `test_compiler.py` — an open-ended range rendered `> None` and errored.
 - `test_parsers.py` — the regex fallback returned empty sources/targets.
 - `test_chat_events.py` — fire-and-forget event tasks reordered the stream.
+- `test_source_filter.py` — a seed CSV was read whole and a `package-lock.json`
+  was parsed as source; data files are now profiled and lock files dropped.

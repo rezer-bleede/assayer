@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WS_URL } from './api';
 import { getSessionId, storage } from './storage';
-import type { ChatMessage, EtlAnalysis, PlanCheck, Question, RunResult, SourceRequirement } from './api';
+import type {
+  ChatMessage,
+  DataProfile,
+  EtlAnalysis,
+  PlanCheck,
+  Question,
+  RunResult,
+  SourceRequirement,
+} from './api';
 
 export type AgentEvent =
   | { type: 'session.ready'; session_id: string; stage?: string }
@@ -24,6 +32,7 @@ export type AgentEvent =
       targets: string[];
       transformations: { kind: string; description: string }[];
       risks: string[];
+      data_profiles?: DataProfile[];
       required_sources?: SourceRequirement[];
     }
   | { type: 'source.introspected'; source_id: string; name: string; tables: number }
@@ -132,6 +141,7 @@ export function useAgentChat() {
             targets: ev.targets ?? [],
             transformations: ev.transformations ?? [],
             risks: ev.risks ?? [],
+            data_profiles: ev.data_profiles ?? [],
             required_sources: ev.required_sources ?? [],
           });
           break;

@@ -141,6 +141,9 @@ def analyze_etl(submit: EtlSubmit) -> EtlAnalysis:
     analysis.repo_url = submit.repo_url
     analysis.repo_ref = submit.repo_ref
     analysis.files = sorted(files) or (["<pasted>"] if submit.code else [])
+    # data-file profiles travel with the analysis; they are evidence about
+    # tables, not source, so they never enter the parsers or the blob
+    analysis.data_profiles = list(submit.data_profiles or [])
     if submit.code and not analysis.raw_code:
         analysis.raw_code = submit.code
 

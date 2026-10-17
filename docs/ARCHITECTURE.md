@@ -9,6 +9,7 @@
   FastAPI (api:8000)
         │
         ├─ ingest        free text → ConnectionSpec / EtlSubmit
+        ├─ intake        source_filter (route) + profile (data metadata)
         ├─ parsers       sqlglot · python ast · dbt manifest
         ├─ connectors    read-only probes per source
         ├─ planner       deterministic baseline + LLM augmentation
@@ -18,6 +19,32 @@
         ├──► Postgres (state)        sessions, connections, plans, runs, results
         └──► Redis    (queue + pub/sub) worker channel + progress fan-out
 ```
+
+## Intake: three destinations, one filter
+
+`app/services/source_filter.py` is the single arbiter for both a git clone
+(`repo_fetch.collect`) and a folder upload (`routers/etl.py`), so the two paths
+can never disagree about what counts as ETL source:
+
+- **CODE / CONFIG** — parsed into lineage. Content sniffs drop minified files
+  and `.sql` files that are really bulk `INSERT` dumps.
+- **DATA** — `.csv`, `.tsv`, `.jsonl`, `.parquet` and JSON arrays go to
+  `app/services/profile.py`, which returns columns, inferred types, null
+  ratios, distinct counts and an exact row count. The rows never enter the
+  analysis, the blob or the prompt; only the profile does. A dbt seed is
+  registered by name (it *is* a physical table) and profiled for its columns.
+- **SKIP** — VCS/dependency directories, binaries, lock files, `.txt`, dbt
+  `target/` artifacts other than the manifest, anything over the caps. Every
+  drop is counted and summarised back to the user.
+
+Uploads carry `mode`: a directory pick (`folder`) is filtered strictly, while
+individual files (`files`) are taken at face value, because naming a file is an
+explicit act.
+
+When a profiled file's table name later binds to a connected table, the planner
+adds a **contract check** (`CheckKind.SCHEMA` with `expected_columns`): a column
+the file promises but the warehouse lacks is drift the pipeline can hide until
+the file is re-uploaded.
 
 ## Human-in-the-loop
 
