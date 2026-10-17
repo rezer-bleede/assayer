@@ -19,10 +19,15 @@ from app.routers import etl as etl_router
 
 @dataclass
 class _Upload:
-    """Stand-in for fastapi.UploadFile: the route only needs read()/filename."""
+    """Stand-in for fastapi.UploadFile: the route needs filename, size, read()."""
 
     filename: str
     payload: bytes
+    size: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.size:
+            self.size = len(self.payload)
 
     async def read(self) -> bytes:
         return self.payload
@@ -146,6 +151,21 @@ def test_upload_rejects_a_pile_of_noise_with_a_useful_message() -> None:
     detail = exc.value.detail
     assert "no readable ETL source" in detail
     assert ".sql" in detail
+
+
+def test_upload_rejects_an_enormous_file_with_a_clear_message() -> None:
+    """The cap is enforced before the body is pulled into memory."""
+    from app.routers.etl import MAX_UPLOAD_FILE_BYTES
+
+    big = [_Upload(filename="warehouse.csv", payload=b"x" * 10)]
+    big[0].size = MAX_UPLOAD_FILE_BYTES + 1
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            etl_router.upload(session_id=None, mode="folder", files=big, paths='["warehouse.csv"]')
+        )
+    assert exc.value.status_code == 413
+    assert "warehouse.csv" in exc.value.detail
+    assert "per-file upload limit" in exc.value.detail
 
 
 def test_upload_rejects_an_empty_request() -> None:

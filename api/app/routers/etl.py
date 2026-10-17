@@ -16,6 +16,10 @@ from app.store import repository as repo
 
 router = APIRouter(prefix="/api/etl", tags=["etl"])
 
+# Absolute ceiling for one uploaded file. The per-kind caps (code vs data) are
+# applied by the filter, but by then the body is already in memory.
+MAX_UPLOAD_FILE_BYTES = 64 * 1_048_576
+
 
 class AnalyzeResponse(BaseModel):
     analysis: EtlAnalysis
@@ -131,15 +135,31 @@ async def upload(
     except json.JSONDecodeError as exc:
         raise HTTPException(400, f"invalid paths payload: {exc}") from exc
 
-    raw_items: list[tuple[str, bytes]] = []
-    for i, f in enumerate(files):
-        raw = await f.read()
-        rel = (
+    def _rel(i: int, f: UploadFile) -> str:
+        return (
             rel_paths[i]
             if rel_paths and i < len(rel_paths) and rel_paths[i]
             else (f.filename or f"upload-{i}.txt")
+        ).replace("\\", "/")
+
+    # Reject a runaway single file *before* reading it. `UploadFile` spools
+    # large parts to disk, but `await f.read()` still pulls the whole thing
+    # into memory, and the caps below would only drop it afterwards.
+    oversize = [(rel, f.size) for i, f in enumerate(files) if f.size
+                for rel in [_rel(i, f)] if f.size > MAX_UPLOAD_FILE_BYTES]
+    if oversize:
+        name, size = oversize[0]
+        raise HTTPException(
+            413,
+            f"{name} is {size / 1_048_576:.1f} MB, above the "
+            f"{MAX_UPLOAD_FILE_BYTES / 1_048_576:.0f} MB per-file upload limit. Point me at "
+            "the transformation code, or drop in a sample of the data file — I profile it "
+            "rather than loading it either way.",
         )
-        raw_items.append((rel.replace("\\", "/"), raw))
+
+    raw_items: list[tuple[str, bytes]] = []
+    for i, f in enumerate(files):
+        raw_items.append((_rel(i, f), await f.read()))
 
     intake = assemble_sources(
         raw_items,

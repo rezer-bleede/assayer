@@ -130,6 +130,24 @@ def test_trust_mode_accepts_anything_textual() -> None:
     assert _kind("dump.json", max_file_bytes=1000, trust=True) is Kind.CODE
 
 
+def test_trust_mode_allows_a_file_beyond_the_code_cap() -> None:
+    """A deliberately picked 3 MB CSV is not "too big for a dbt model"."""
+    verdict = classify(
+        "orders.csv", size=3_000_000, max_file_bytes=131_072, data_max_bytes=8_000_000,
+        trust=True,
+    )
+    assert verdict.kind is Kind.CODE
+    strict = classify(
+        "orders.csv", size=3_000_000, max_file_bytes=131_072, data_max_bytes=8_000_000
+    )
+    assert strict.kind is Kind.DATA
+    over = classify(
+        "orders.csv", size=90_000_000, max_file_bytes=131_072, data_max_bytes=8_000_000,
+        trust=True,
+    )
+    assert over.reason is Skip.SIZE
+
+
 # --- seeds / content sniffs ------------------------------------------------- #
 
 

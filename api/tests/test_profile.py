@@ -108,6 +108,25 @@ def test_jsonl_profiled_line_by_line() -> None:
     assert profile.columns[0].name == "id"
 
 
+def test_json_keys_that_need_sanitising_keep_their_values() -> None:
+    """`user id` is reported as `user_id`, and the values must follow it."""
+    raw = json.dumps([{"user id": 1, "\ufeffname": "a"}, {"user id": 2, "\ufeffname": "b"}]).encode()
+    profile = profile_file("export/x.json", raw)
+    assert profile is not None
+    cols = {c.name: c for c in profile.columns}
+    assert set(cols) == {"user_id", "name"}
+    assert cols["user_id"].data_type == "integer"
+    assert cols["user_id"].null_ratio == 0.0
+    assert cols["user_id"].samples == ["1", "2"]
+
+
+def test_jsonl_columns_missing_from_some_rows_are_reported() -> None:
+    profile = profile_file("d/x.jsonl", b'{"id": 1, "note": "a"}\n{"id": 2}\n')
+    assert profile is not None
+    note = next(c for c in profile.columns if c.name == "note")
+    assert note.null_ratio == 0.5
+
+
 def test_non_tabular_json_returns_nothing() -> None:
     assert profile_file("config.json", b'{"name": "shop"}') is None
     assert profile_file("notes.txt", b"hello") is None

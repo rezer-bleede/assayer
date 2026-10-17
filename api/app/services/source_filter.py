@@ -201,8 +201,13 @@ def classify(
 
     # A deliberate pick is a deliberate pick: no junk list, no extension
     # filtering, no data-vs-config guessing. Only the unreadable stays unread.
+    # Because nothing is classified, the size ceiling is the *data* one — a
+    # user who picks a 3 MB CSV by hand must not be told it is too big for a
+    # dbt model.
+    trusted = False
     if trust:
         kind = Kind.CONFIG if ext in CONFIG_EXT else Kind.CODE
+        trusted = True
     elif low in JUNK_NAMES:
         return Verdict(Kind.SKIP, Skip.JUNK)
     elif ext in CODE_EXT:
@@ -219,7 +224,9 @@ def classify(
         return Verdict(Kind.SKIP, Skip.TYPE)
 
     limit = (
-        manifest_max_bytes
+        data_max_bytes
+        if trusted and data_max_bytes is not None
+        else manifest_max_bytes
         if is_manifest and manifest_max_bytes is not None
         else data_max_bytes
         if kind is Kind.DATA and data_max_bytes is not None
@@ -375,6 +382,7 @@ def assemble_sources(
             out.contents.setdefault(rel_path, "")
 
         data_route = verdict.kind is Kind.DATA or verdict.kind is Kind.SNIFF
+        resolved_json = False
         if data_route:
             # parquet *is* binary; sniffing it for control chars would throw
             # away the most valuable data file a warehouse project ships
@@ -396,6 +404,7 @@ def assemble_sources(
                 if decision is Kind.CONFIG:
                     verdict = Verdict(Kind.CONFIG)
                     data_route = False
+                    resolved_json = True
             if data_route:
                 if max_data_files is not None and len(out.profiles) >= max_data_files:
                     note("over-data-file-cap")
@@ -420,7 +429,8 @@ def assemble_sources(
         if text.count("\ufffd") > max(20, len(text) // 20):
             note(str(Skip.BINARY))
             continue
-        if not trust:
+        # a JSON already decided above must not be parsed a second time
+        if not trust and not resolved_json:
             resolved = sniff_text(rel_path, text)
             if resolved.kind is Kind.SKIP:
                 note(str(resolved.reason))

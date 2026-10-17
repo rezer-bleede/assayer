@@ -35,7 +35,7 @@ from app.core.config import settings
 from app.core.logging import log
 from app.schemas import DataProfile
 from app.services.profile import profile_file
-from app.services.source_filter import Kind, classify, is_seed_csv, sniff_text
+from app.services.source_filter import Kind, Skip, classify, is_seed_csv, sniff_text
 
 _CRED_RE = re.compile(
     r"(?P<scheme>[a-zA-Z][\w+.-]*)://(?P<user>[^:/@\s]+)(?::(?P<secretp>[^@\s]+))?@"
@@ -211,7 +211,9 @@ def collect(
             data_max_bytes=settings.intake_data_max_bytes,
         )
         if verdict.kind is Kind.SKIP:
-            if rel.endswith("manifest.json"):
+            # only an over-budget manifest is worth mentioning; the rest of the
+            # skip reasons (deps, binaries, junk) are the normal case
+            if rel.endswith("manifest.json") and verdict.reason is Skip.SIZE:
                 warnings.append(f"skipped oversized manifest at {rel}")
             continue
 
@@ -250,8 +252,9 @@ def collect(
             warnings.append(f"could not read {rel}: {scrub(str(exc))}")
             continue
 
-        resolved = sniff_text(rel, text)
-        if resolved.kind is Kind.SKIP:
+        # the manifest is lineage by name; re-deciding a 4 MB document by
+        # content would parse it twice and could drop it if dbt renames a key
+        if path.name != "manifest.json" and sniff_text(rel, text).kind is Kind.SKIP:
             continue
 
         total += len(text)

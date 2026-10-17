@@ -160,9 +160,12 @@ def _build(
 
     headers = [rename.get(h, h) for h in headers] if headers else list(rename.values())
     columns = [_ColumnAccumulator(h) for h in headers[:MAX_COLUMNS]]
+    # records are keyed by the *raw* column name, which is not always the name
+    # we report (`user id` -> `user_id`), so look values up through the map
+    raw_by_reported = {reported: raw for raw, reported in rename.items()}
     for record in records:
         for col in columns:
-            col.add(record.get(col.name))
+            col.add(record.get(raw_by_reported.get(col.name, col.name)))
 
     return DataProfile(
         path=path,
