@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -8,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.connectors.factory import SUPPORTED_SOURCES, build_connector
 from app.core.logging import log
 from app.schemas import ConnectionSpec, ConnectionStatus
-from app.services.ingest import extract_connections
+from app.services.ingest import _SCHEME_MAP, extract_connections
 from app.services.requirements import split_ref
 from app.store import repository as repo
 
@@ -131,15 +132,39 @@ class FromUrlRequest(BaseModel):
     target_tables: list[str] = Field(default_factory=list)
 
 
+def _url_diagnosis(url: str) -> str:
+    """Explain *why* a connection string was unreadable, when we can tell."""
+    text = (url or "").strip()
+    m = re.match(r"^([a-z][a-z0-9+.\-]*)://", text, re.I)
+    if m:
+        scheme = m.group(1).lower()
+        if scheme not in _SCHEME_MAP:
+            supported = ", ".join(sorted(set(_SCHEME_MAP)))
+            return (
+                f"Unsupported connection scheme {scheme!r}://. "
+                f"Supported: {supported}."
+            )
+        return (
+            f"I could not read the host/database out of that {scheme}:// URL. "
+            "Expected scheme://user:password@host:port/database — a password "
+            "containing '@' must be URL-encoded (%40)."
+        )
+    if "@" in text and ":" in text:
+        return (
+            "That looks like connection parts but not a URL. Try: "
+            "postgresql://user:password@host:5432/database"
+        )
+    return (
+        "That doesn't look like a connection URL. Expected something like "
+        "postgresql://user:password@host:5432/database"
+    )
+
+
 @router.post("/from-url", response_model=TestConnectionResponse)
 def connect_from_url(req: FromUrlRequest) -> TestConnectionResponse:
     specs = extract_connections(req.url)
     if not specs:
-        raise HTTPException(
-            422,
-            "That doesn't look like a connection URL. Expected something like "
-            "postgresql://user:password@host:5432/database",
-        )
+        raise HTTPException(422, _url_diagnosis(req.url))
     return test_connection(
         TestConnectionRequest(
             spec=specs[0],

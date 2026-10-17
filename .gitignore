@@ -6,15 +6,16 @@ __pycache__/
 # C extensions
 *.so
 
-# Distribution / packaging
+# Distribution / packaging (root-anchored: a bare `lib/` would also swallow
+# web/lib/ — Next.js source — as the ignore template silently did here.)
 .Python
-build/
+/build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/

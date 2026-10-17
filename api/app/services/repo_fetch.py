@@ -33,44 +33,11 @@ from urllib.parse import urlsplit, urlunsplit
 
 from app.core.config import settings
 from app.core.logging import log
+from app.services.source_filter import Skip, classify, is_seed_csv
 
 _CRED_RE = re.compile(
     r"(?P<scheme>[a-zA-Z][\w+.-]*)://(?P<user>[^:/@\s]+)(?::(?P<secretp>[^@/\s]+))?@"
 )
-
-# directories that are never ETL and often enormous
-_SKIP_DIRS = {
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
-    "env",
-    "__pycache__",
-    ".tox",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "dist",
-    "build",
-    ".idea",
-    ".vscode",
-    "site-packages",
-    ".next",
-    "target/compilation",
-    "logs",
-}
-
-# extensions we are willing to read as source
-_INCLUDE_EXT = {".sql", ".py", ".yml", ".yaml", ".json", ".txt", ".ddl", ".jinja", ".j2"}
-
-# only these specific files are worth reading regardless of extension
-_INCLUDE_NAMES = {
-    "dbt_project.yml",
-    "profiles.yml",
-    "packages.yml",
-    "selectors.yml",
-    "manifest.json",
-}
 
 # a manifest can be huge; models are the interesting part
 _MAX_MANIFEST_BYTES = 4_000_000
@@ -213,7 +180,11 @@ def _run_clone(
 
 
 def collect(dirpath: Path, warnings: list[str]) -> tuple[dict[str, str], dict | None]:
-    """Walk the clone for readable source, honouring size/count caps."""
+    """Walk the clone for readable source, honouring size/count caps.
+
+    Relevance itself is decided by `source_filter.classify` so a cloned repo
+    and an uploaded folder are filtered by exactly the same rules.
+    """
     files: dict[str, str] = {}
     manifest: dict | None = None
     total = 0
@@ -222,25 +193,31 @@ def collect(dirpath: Path, warnings: list[str]) -> tuple[dict[str, str], dict | 
         if not path.is_file():
             continue
         rel = path.relative_to(dirpath).as_posix()
-        if any(part in _SKIP_DIRS for part in path.parts[:-1]):
-            continue
-        if path.suffix.lower() not in _INCLUDE_EXT and path.name not in _INCLUDE_NAMES:
-            continue
+        size = path.stat().st_size
+
         # seed CSVs tell us a table exists; their contents never affect lineage,
         # so register the name only and skip the (potentially large) read
-        if path.suffix.lower() == ".csv":
-            if "seed" in rel.lower():
-                files.setdefault(rel, "")
+        if is_seed_csv(rel):
+            files.setdefault(rel, "")
             continue
-        if rel.split("/")[-1] == "manifest.json" and path.stat().st_size > _MAX_MANIFEST_BYTES:
+
+        verdict = classify(
+            rel,
+            size=size,
+            max_file_bytes=settings.repo_max_file_bytes,
+            manifest_max_bytes=_MAX_MANIFEST_BYTES,
+        )
+        if verdict is Skip.SIZE and rel.endswith("manifest.json"):
             warnings.append(f"skipped oversized manifest at {rel}")
+            continue
+        if verdict is not Skip.KEEP:
             continue
         if len(files) >= settings.repo_max_files:
             warnings.append(f"stopped at {settings.repo_max_files} files; the repo is larger")
             break
-
-        size = path.stat().st_size
-        if size > settings.repo_max_file_bytes:
+        if size > _MAX_MANIFEST_BYTES or (
+            size > settings.repo_max_file_bytes and not rel.endswith("manifest.json")
+        ):
             warnings.append(f"skipped {rel} ({size:,} bytes > cap)")
             continue
         try:

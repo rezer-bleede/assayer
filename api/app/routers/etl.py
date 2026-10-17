@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -12,6 +11,7 @@ from app.core.logging import log
 from app.parsers import analyze_etl
 from app.schemas import EtlAnalysis, EtlLanguage, EtlSubmit, SourceRequirement
 from app.services.repo_fetch import RepoError, fetch
+from app.services.source_filter import assemble_sources
 from app.store import repository as repo
 
 router = APIRouter(prefix="/api/etl", tags=["etl"])
@@ -100,35 +100,49 @@ async def from_repo(req: RepoRequest) -> AnalyzeResponse:
 async def upload(
     session_id: str | None = Form(default=None),
     files: list[UploadFile] = File(default_factory=list),
+    paths: str | None = Form(
+        None,
+        description="JSON array of relative paths matching `files` (folder uploads "
+        "keep their structure so dbt models/seeds/profiles are recognised)",
+    ),
 ) -> AnalyzeResponse:
-    """Analyse uploaded source files. Binary members are skipped, not fatal."""
+    """Analyse uploaded source files — individually or as a whole folder.
+
+    Irrelevant members (VCS/dependency dirs, binaries, oversized files, files
+    we never parse) are skipped rather than fatal, and summarised back in the
+    analysis risks so the user can see what was left out.
+    """
     if not files:
         raise HTTPException(400, "no files uploaded")
 
-    contents: dict[str, str] = {}
-    manifest: dict[str, Any] | None = None
-    skipped: list[str] = []
+    try:
+        rel_paths: list[str] | None = json.loads(paths) if paths else None
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"invalid paths payload: {exc}") from exc
 
-    for f in files:
+    raw_items: list[tuple[str, bytes]] = []
+    for i, f in enumerate(files):
         raw = await f.read()
-        name = f.filename or "upload.txt"
-        if len(raw) > settings.repo_max_file_bytes:
-            skipped.append(f"{name} (too large)")
-            continue
-        text = raw.decode("utf-8", errors="replace")
-        if name.endswith("manifest.json"):
-            try:
-                parsed = json.loads(text)
-                if isinstance(parsed, dict) and "nodes" in parsed:
-                    manifest = parsed
-                    continue
-            except json.JSONDecodeError:
-                skipped.append(f"{name} (invalid JSON)")
-                continue
-        contents[name] = text
+        rel = (
+            rel_paths[i]
+            if rel_paths and i < len(rel_paths) and rel_paths[i]
+            else (f.filename or f"upload-{i}.txt")
+        )
+        raw_items.append((rel.replace("\\", "/"), raw))
+
+    contents, manifest, notes = assemble_sources(
+        raw_items,
+        max_files=settings.repo_max_files,
+        max_file_bytes=settings.repo_max_file_bytes,
+    )
 
     if not contents and not manifest:
-        raise HTTPException(400, f"no readable source files ({', '.join(skipped) or 'none provided'})")
+        raise HTTPException(
+            400,
+            "no readable ETL source found — everything uploaded was filtered out"
+            " (dependencies, binaries or unsupported file types). Select the project"
+            " folder or the .sql / .py / dbt YAML files themselves.",
+        )
 
     language = _detect_language(contents, manifest)
     analysis = analyze_etl(
@@ -136,13 +150,28 @@ async def upload(
             language=language,
             files=contents,
             manifest=manifest,
-            label=next(iter(contents), "upload"),
+            label=_project_label(contents),
             origin="upload",
         )
     )
-    analysis.risks = [*skipped, *analysis.risks]
+    analysis.risks = [*notes, *analysis.risks]
     repo.save_etl(analysis, session_id)
+    log.info(
+        "upload analysed",
+        uploaded=len(raw_items),
+        kept=len(analysis.files),
+        requirements=len(analysis.required_sources),
+    )
     return AnalyzeResponse(analysis=analysis, required_sources=analysis.required_sources)
+
+
+def _project_label(contents: dict[str, str]) -> str:
+    """Human name for the upload: the folder when one was sent, else the file."""
+    for rel in contents:
+        parts = rel.split("/")
+        if len(parts) > 1:
+            return parts[0]
+    return next(iter(contents), "upload")
 
 
 @router.get("/{etl_id}", response_model=EtlAnalysis)

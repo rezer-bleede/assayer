@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Question, QuestionOption } from '@/lib/api';
+import {
+  describeSelection,
+  filterUpload,
+  fromDataTransfer,
+  fromFileList,
+  type FileSelection,
+} from '@/lib/upload';
 import { cn } from '@/lib/utils';
 
 export type QuestionStatus = {
@@ -27,7 +34,7 @@ export function QuestionCard({
   question: Question;
   status: QuestionStatus;
   onSubmitRepo: (url: string, ref: string | null, token: string | null) => void;
-  onSubmitFiles: (files: File[]) => void;
+  onSubmitFiles: (selection: FileSelection) => void;
   onPaste: () => void;
   onSubmitConnection: (url: string) => void;
   onSkip?: () => void;
@@ -43,29 +50,30 @@ export function QuestionCard({
   const [url, setUrl] = useState('');
   const [ref, setRef] = useState('');
   const [token, setToken] = useState('');
-  const [picked, setPicked] = useState<File[]>([]);
+  const [sel, setSel] = useState<FileSelection | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dirRef = useRef<HTMLInputElement>(null);
 
   // start each new question with a clean form
   useEffect(() => {
     setUrl('');
     setRef('');
     setToken('');
-    setPicked([]);
+    setSel(null);
   }, [question.id]);
 
   const activeOption = options.find((o) => o.kind === active) ?? options[0];
   const canSubmit =
     !status.busy &&
     ((active === 'git_url' && url.trim().length > 5) ||
-      (active === 'file_upload' && picked.length > 0) ||
+      (active === 'file_upload' && (sel?.files.length ?? 0) > 0) ||
       (active === 'connection' && url.trim().length > 5));
 
   const submit = () => {
     if (!canSubmit) return;
     if (active === 'git_url') onSubmitRepo(url.trim(), ref.trim() || null, token.trim() || null);
-    else if (active === 'file_upload') onSubmitFiles(picked);
+    else if (active === 'file_upload' && sel) onSubmitFiles(sel);
     else if (active === 'connection') onSubmitConnection(url.trim());
   };
 
@@ -133,10 +141,11 @@ export function QuestionCard({
               setDragging(true);
             }}
             onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
+            onDrop={async (e) => {
               e.preventDefault();
               setDragging(false);
-              setPicked(Array.from(e.dataTransfer.files));
+              const items = await fromDataTransfer(e.dataTransfer);
+              setSel(filterUpload(items));
             }}
             className={cn(
               'rounded-xl border border-dashed px-4 py-6 text-center transition-colors',
@@ -144,31 +153,49 @@ export function QuestionCard({
             )}
           >
             <p className="text-[13px] text-muted">
-              Drop <code className="font-mono">.sql</code>,{' '}
-              <code className="font-mono">.py</code> or dbt YAML files here
+              Select or drop your <b>project folder</b> — I read only the ETL-relevant
+              files (<code className="font-mono">.sql</code>,{' '}
+              <code className="font-mono">.py</code>, dbt YAML/JSON) and skip git
+              metadata, dependencies and binaries.
             </p>
-            <button type="button" className="btn-ghost mt-3" onClick={() => fileRef.current?.click()}>
-              Choose files
-            </button>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <button type="button" className="btn-primary" onClick={() => dirRef.current?.click()}>
+                Choose project folder
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => fileRef.current?.click()}>
+                Choose files
+              </button>
+            </div>
+            <input
+              ref={dirRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => setSel(filterUpload(fromFileList(e.target.files ?? [])))}
+              {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+            />
             <input
               ref={fileRef}
               type="file"
               multiple
               className="hidden"
               accept=".sql,.py,.yml,.yaml,.json,.txt,.ddl,.j2,.jinja"
-              onChange={(e) => setPicked(Array.from(e.target.files ?? []))}
+              onChange={(e) => setSel(filterUpload(fromFileList(e.target.files ?? [])))}
             />
-            {picked.length > 0 && (
-              <ul className="mx-auto mt-3 max-w-md space-y-0.5 text-left">
-                {picked.slice(0, 8).map((f) => (
-                  <li key={f.name} className="truncate font-mono text-[11.5px] text-muted">
-                    {f.name}
-                  </li>
-                ))}
-                {picked.length > 8 && (
-                  <li className="text-[11.5px] text-muted">+{picked.length - 8} more</li>
-                )}
-              </ul>
+            {sel && (
+              <div className="mx-auto mt-3 max-w-md text-left">
+                <p className="text-[12px] font-medium text-pass">{describeSelection(sel)}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {sel.files.slice(0, 8).map((nf) => (
+                    <li key={nf.path} className="truncate font-mono text-[11.5px] text-muted">
+                      {nf.path}
+                    </li>
+                  ))}
+                  {sel.files.length > 8 && (
+                    <li className="text-[11.5px] text-muted">+{sel.files.length - 8} more</li>
+                  )}
+                </ul>
+              </div>
             )}
           </div>
         )}
@@ -242,6 +269,8 @@ function GitForm({
     <div className="space-y-2.5">
       <input
         className="field font-mono"
+        autoComplete="off"
+        spellCheck={false}
         placeholder={placeholder || 'https://github.com/acme/analytics.git'}
         value={url}
         disabled={busy}
@@ -251,6 +280,7 @@ function GitForm({
       <div className="grid gap-2.5 sm:grid-cols-2">
         <input
           className="field"
+          autoComplete="off"
           placeholder="branch or tag (optional)"
           value={ref_}
           disabled={busy}
@@ -260,6 +290,10 @@ function GitForm({
           <input
             className="field pr-14"
             type={showToken ? 'text' : 'password'}
+            // "new-password" (not "off"): Chrome ignores autocomplete=off on
+            // password fields and would otherwise offer to store a git PAT.
+            autoComplete="new-password"
+            spellCheck={false}
             placeholder="access token (private repos)"
             value={token}
             disabled={busy}
@@ -300,6 +334,9 @@ function ConnectionForm({
     <div className="space-y-2.5">
       <input
         className="field font-mono"
+        // The URL embeds the DB password; keep it out of browser storage.
+        autoComplete="off"
+        spellCheck={false}
         placeholder={prefill.placeholder || 'postgresql://user:password@host:5432/database'}
         value={url}
         disabled={busy}

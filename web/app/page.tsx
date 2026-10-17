@@ -7,6 +7,7 @@ import { PlanCard } from '@/components/PlanCard';
 import { QuestionCard, type QuestionStatus } from '@/components/QuestionCard';
 import { ResultsCard } from '@/components/ResultsCard';
 import { api, type RunResult } from '@/lib/api';
+import type { FileSelection } from '@/lib/upload';
 import { useAgentChat } from '@/lib/useAgentChat';
 import { cn } from '@/lib/utils';
 
@@ -92,10 +93,10 @@ export default function ChatPage() {
   );
 
   const handleFiles = useCallback(
-    async (files: File[]) => {
+    async (sel: FileSelection) => {
       setQStatus({ busy: true });
       try {
-        const res = await api.uploadFiles(files, sessionId);
+        const res = await api.uploadFiles(sel, sessionId);
         setQStatus({
           busy: false,
           ok: `Read ${res.analysis.files.length} file(s).`,

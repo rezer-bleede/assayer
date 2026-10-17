@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.schemas import EtlSubmit
 from app.services.ingest import (
     extract_connections,
@@ -77,3 +79,42 @@ def test_looks_like_code() -> None:
 def test_etl_submit_roundtrip() -> None:
     submit = EtlSubmit(language="sql", code="SELECT 1")
     assert submit.language == "sql"
+
+def test_from_url_connects_when_parseable() -> None:
+    """A URL-shaped input parses and *attempts* a connection (which then fails)."""
+    from fastapi import HTTPException
+
+    from app.routers.connections import FromUrlRequest, connect_from_url
+
+    try:
+        connect_from_url(
+            FromUrlRequest(url="postgresql://u:p@no-such-host.invalid:5432/db")
+        )
+    except HTTPException as exc:
+        # only the parse failure surfaces as 422; DNS failure is a red ok=False
+        raise AssertionError(f"unexpected 422 for a valid URL shape: {exc.detail}") from exc
+    except Exception:
+        pass  # any driver/DNS error means parsing succeeded and connect was tried
+
+
+def test_from_url_rejects_unsupported_scheme_with_clear_message() -> None:
+    from fastapi import HTTPException
+
+    from app.routers.connections import FromUrlRequest, connect_from_url
+
+    with pytest.raises(HTTPException) as exc:
+        connect_from_url(FromUrlRequest(url="mongodb://u:p@host/db"))
+    assert exc.value.status_code == 422
+    assert "mongodb" in exc.value.detail
+    assert "postgres" in exc.value.detail  # lists what IS supported
+
+
+def test_from_url_rejects_non_url_with_clear_message() -> None:
+    from fastapi import HTTPException
+
+    from app.routers.connections import FromUrlRequest, connect_from_url
+
+    with pytest.raises(HTTPException) as exc:
+        connect_from_url(FromUrlRequest(url="just some words about my database"))
+    assert exc.value.status_code == 422
+    assert "connection URL" in exc.value.detail
