@@ -187,6 +187,42 @@ def test_unknown_dbt_adapter_does_not_bubble_out_of_the_route() -> None:
     assert req.port_hint == 9000
 
 
+def test_jinja_templated_clickhouse_project_uploads_clean() -> None:
+    """The exact failure shape from the browser: env_var templates everywhere.
+
+    Once produced `400 could not parse ETL: ... port_hint ... int_parsing`.
+    Intake must recover the defaults it can, drop what it cannot, and never
+    fail because the user wrote idiomatic dbt YAML.
+    """
+    files = [
+        ("shop/dbt_project.yml", b"name: shop\nprofile: shop\n"),
+        ("shop/models/stg_orders.sql", b"select * from {{ source('raw','orders') }}"),
+        (
+            "shop/profiles.yml",
+            b"shop:\n  target: prod\n  outputs:\n    prod:\n"
+            b"      type: clickhouse\n"
+            b"      host: \"{{ env_var('CLICKHOUSE_HOST', 'analytics-ch.internal') }}\"\n"
+            b"      port: \"{{ env_var('CLICKHOUSE_PORT', '8123') | int }}\"\n"
+            b"      user: \"{{ env_var('CLICKHOUSE_USER') }}\"\n"
+            b"      password: \"{{ env_var('CLICKHOUSE_PW') }}\"\n"
+            b"      database: warehouse\n      schema: raw\n",
+        ),
+    ]
+    res = _call(files)
+    req = res.required_sources[0]
+    assert req.host_hint == "analytics-ch.internal"
+    assert req.port_hint == 8123
+    assert req.user_hint is None
+    # a template secret never leaves the parser, and hint fields carry no
+    # raw Jinja ({{ in a *transformation description* is legitimate: it is
+    # quoting the user's dbt macro)
+    hints_blob = str([q.model_dump() for q in res.required_sources]) + str(
+        res.analysis.connection_hints
+    )
+    assert "CLICKHOUSE_PW" not in hints_blob
+    assert "{{" not in hints_blob
+
+
 def test_malformed_source_fails_as_400_not_500() -> None:
     """Parser exceptions are input problems — no opaque server errors."""
     from app.routers.etl import _parse

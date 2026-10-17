@@ -118,3 +118,48 @@ def test_from_url_rejects_non_url_with_clear_message() -> None:
         connect_from_url(FromUrlRequest(url="just some words about my database"))
     assert exc.value.status_code == 422
     assert "connection URL" in exc.value.detail
+
+
+# --- templated dbt YAML values ---------------------------------------------- #
+
+
+def test_jinja_value_recovers_env_var_defaults() -> None:
+    from app.services.ingest import jinja_value
+
+    assert jinja_value("{{ env_var('CLICKHOUSE_PORT', '8123') | int }}") == "8123"
+    assert jinja_value('{{ env_var("PG_HOST", "db.internal") }}') == "db.internal"
+    assert jinja_value("{{ env_var('X', '9000') | as_number }}") == "9000"
+
+
+def test_jinja_value_drops_unrecoverable_templates() -> None:
+    from app.services.ingest import jinja_value
+
+    # no default to recover
+    assert jinja_value("{{ env_var('CLICKHOUSE_HOST') }}") is None
+    # conditionals / macros cannot be evaluated from the file alone
+    assert jinja_value("{{ 'raw' if target.name == 'prod' else 'raw_dev' }}") is None
+    assert jinja_value("{{ var('schema') }}") is None
+    # never hand the UI a string that still contains {{
+    assert "{{" not in str(jinja_value("host-{{ env_var('SUFFIX') }}"))
+
+
+def test_jinja_value_plain_passthrough() -> None:
+    from app.services.ingest import jinja_value
+
+    assert jinja_value("ch.internal") == "ch.internal"
+    assert jinja_value("  quoted  ") == "quoted"
+    assert jinja_value('"quoted2"') == "quoted2"
+    assert jinja_value(8123) == 8123
+    assert jinja_value(None) is None
+
+
+def test_coerce_port() -> None:
+    from app.services.ingest import coerce_port
+
+    assert coerce_port("{{ env_var('PORT', '8123') | int }}") == 8123
+    assert coerce_port("5432") == 5432
+    assert coerce_port(5432) == 5432
+    assert coerce_port("not-a-port") is None
+    assert coerce_port(0) is None
+    assert coerce_port(70000) is None
+    assert coerce_port(None) is None

@@ -203,3 +203,61 @@ def test_demo_example_files_are_valid_sql() -> None:
     a = analyze_etl(EtlSubmit(language="sql", code=demo.read_text()))
     assert a.sources == ["raw.orders", "raw.customers"], a.sources
     assert a.targets == ["analytics.daily_revenue"], a.targets
+
+
+# --- dbt YAML with Jinja templates ------------------------------------------- #
+
+_TEMPLATED_PROFILES = """
+warehouse:
+  target: prod
+  outputs:
+    prod:
+      type: clickhouse
+      host: "{{ env_var('CLICKHOUSE_HOST', 'analytics-ch.internal') }}"
+      port: "{{ env_var('CLICKHOUSE_PORT', '8123') | int }}"
+      user: "{{ env_var('CLICKHOUSE_USER') }}"
+      password: "{{ env_var('CLICKHOUSE_PW') }}"
+      database: warehouse
+      schema: raw
+      secure: True
+"""
+
+_TEMPLATED_SOURCES = """
+version: 2
+sources:
+  - name: raw
+    database: "{{ env_var('RAW_DB', 'warehouse') }}"
+    schema: "{{ env_var('RAW_SCHEMA', 'raw') }}"
+    tables:
+      - name: orders
+      - name: events
+        identifier: "{{ env_var('EV_TABLE') }}"
+"""
+
+
+def test_dbt_hints_recovers_env_var_defaults() -> None:
+    from app.parsers.dbt_parser import dbt_hints
+
+    hints, conns = dbt_hints(
+        {"shop/profiles.yml": _TEMPLATED_PROFILES, "shop/models/schema.yml": _TEMPLATED_SOURCES}
+    )
+    conn = conns[0]
+    assert conn["host"] == "analytics-ch.internal"
+    assert conn["port"] == 8123
+    assert conn["database"] == "warehouse"
+    assert conn["schema"] == "raw"
+    # a template with no default is dropped entirely, never forwarded raw
+    assert "username" not in conn
+    # passwords never travel in hints
+    joined = " ".join(str(v) for h in hints.values() for v in h.values()) + " " + str(conns)
+    assert "CLICKHOUSE_PW" not in joined
+    assert "{{" not in joined
+    assert hints["raw.orders"]["database"] == "warehouse"
+    assert hints["raw.events"]["table"] == "events"  # unresolvable identifier -> name
+
+
+def test_dbt_hints_plain_values_unchanged() -> None:
+    from app.parsers.dbt_parser import dbt_hints
+
+    _hints, conns = dbt_hints({"profiles.yml": _TEMPLATED_PROFILES})
+    assert conns[0]["port"] == 8123

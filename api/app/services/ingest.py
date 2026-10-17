@@ -216,3 +216,47 @@ def looks_like_code(text: str, min_len: int = 40) -> bool:
     return len(text.strip()) >= min_len and bool(
         _SQL_HINT.search(text) or _PY_HINT.search(text) or _DBT_HINT.search(text)
     )
+
+# --------------------------------------------------------------------------- #
+# templated YAML values
+# --------------------------------------------------------------------------- #
+
+# a whole-field Jinja placeholder whose env_var has a default literal
+_ENV_VAR_DEFAULT_RE = re.compile(
+    r"^\{\{\s*env_var\(\s*['\"]\w+['\"]\s*,\s*['\"](?P<default>[^'\"]*)['\"]\s*\)"
+    r"(?:\s*\|\s*(?:int|as_number|as_text|string))?\s*\}\}$",
+    re.I,
+)
+
+
+def jinja_value(raw: object) -> object | None:
+    """The best literal a templated dbt YAML value can honestly yield.
+
+    dbt projects templatise everything: `port: "{{ env_var('PG_PORT', '5432') }}"`.
+    We cannot evaluate the template (the environment belongs to the user's
+    shell, not to us), but an `env_var` *default* is a literal in the file and
+    safe to recover. Anything else inside `{{ }}` — no default, a conditional,
+    a macro — returns None: a dropped hint is honest, a raw template string
+    rendered as "the host" is a lie the UI would pre-fill with garbage.
+    """
+    if not isinstance(raw, str):
+        return raw  # ints/bools from YAML, or None
+    text = raw.strip().strip("'\"")
+    if "{{" not in text:
+        return text or None
+    m = _ENV_VAR_DEFAULT_RE.match(text)
+    return m.group("default").strip() or None if m else None
+
+
+def coerce_port(raw: object) -> int | None:
+    """Port as int, from YAML ints, strings, or env_var defaults."""
+    value = jinja_value(raw)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        port = int(str(value).strip())
+    except ValueError:
+        return None
+    return port if 1 <= port <= 65535 else None

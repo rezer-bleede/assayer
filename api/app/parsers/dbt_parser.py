@@ -11,6 +11,7 @@ import os
 import yaml
 
 from app.schemas import EtlLanguage, LineageEdge, Transformation
+from app.services.ingest import coerce_port, jinja_value
 
 _TEST_HINTS = {
     "not_null": "column must never be NULL",
@@ -335,16 +336,18 @@ def dbt_hints(files: dict[str, str]) -> tuple[dict[str, dict], list[dict]]:
             for _target, o in outputs.items():
                 if not isinstance(o, dict):
                     continue
+                # profiles.yml is Jinja: recover env_var defaults, never a
+                # raw `{{ ... }}` string, and never a password reference
                 conn_hints.append(
                     {
-                        "type": str(o.get("type") or ""),
-                        "host": o.get("host"),
-                        "port": o.get("port"),
-                        "database": o.get("dbname") or o.get("database"),
-                        "schema": o.get("schema"),
-                        "username": o.get("user") or o.get("username"),
-                        "account": o.get("account"),
-                        "warehouse": o.get("warehouse"),
+                        "type": str(jinja_value(o.get("type")) or ""),
+                        "host": jinja_value(o.get("host")),
+                        "port": coerce_port(o.get("port")),
+                        "database": jinja_value(o.get("dbname") or o.get("database")),
+                        "schema": jinja_value(o.get("schema")),
+                        "username": jinja_value(o.get("user") or o.get("username")),
+                        "account": jinja_value(o.get("account")),
+                        "warehouse": jinja_value(o.get("warehouse")),
                     }
                 )
 
@@ -360,23 +363,23 @@ def dbt_hints(files: dict[str, str]) -> tuple[dict[str, dict], list[dict]]:
         for src in doc.get("sources") or []:
             if not isinstance(src, dict):
                 continue
-            sname = src.get("name")
-            base_db = src.get("database")
-            base_schema = src.get("schema") or src.get("identifier")
+            sname = jinja_value(src.get("name"))
+            base_db = jinja_value(src.get("database"))
+            base_schema = jinja_value(src.get("schema") or src.get("identifier"))
             for tbl in src.get("tables") or []:
                 if not isinstance(tbl, dict) or not sname:
                     continue
-                logical = f"{sname}.{tbl.get('name')}"
+                logical = f"{sname}.{jinja_value(tbl.get('name'))}"
                 hint = {
-                    "database": tbl.get("database") or base_db,
-                    "schema": tbl.get("schema") or base_schema,
-                    "table": tbl.get("identifier") or tbl.get("name"),
+                    "database": jinja_value(tbl.get("database")) or base_db,
+                    "schema": jinja_value(tbl.get("schema")) or base_schema,
+                    "table": jinja_value(tbl.get("identifier")) or jinja_value(tbl.get("name")),
                     "origin": "dbt sources.yml",
                 }
                 table_hints[logical] = hint
                 # also index by the physical name so `raw.orders` in SQL binds too
                 if base_schema:
-                    table_hints.setdefault(f"{base_schema}.{tbl.get('name')}", hint)
+                    table_hints.setdefault(f"{base_schema}.{jinja_value(tbl.get('name'))}", hint)
 
     # keep hints honest: drop empty rows and never carry a password forward
     conn_hints = [

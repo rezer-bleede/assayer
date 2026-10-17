@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 
 from app.schemas import ConnectionSpec, EtlAnalysis, SourceRequirement, SourceType
-from app.services.ingest import extract_connections
+from app.services.ingest import coerce_port, extract_connections
 
 # `schema.table` / `db.schema.table` / quoted or backticked variants
 _SPLIT_RE = re.compile(r"^(?:(?P<a>[\w\"`\[\]]+)\.)?(?P<b>[\w\"`\[\]]+)$")
@@ -155,7 +155,8 @@ def derive_requirements(analysis: EtlAnalysis) -> list[SourceRequirement]:
         if matched:
             engine = _engine_type(matched.get("type"))
             host, database = matched.get("host"), matched.get("database") or g["database"]
-            port, user = matched.get("port"), matched.get("username")
+            # hints reach us from YAML *and* chat JSON — coerce at the boundary
+            port, user = coerce_port(matched.get("port")), matched.get("username")
             g["origin"] = "engine url in code"
             g["confidence"] = max(g["confidence"], 0.85)
 

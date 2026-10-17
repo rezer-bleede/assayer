@@ -108,6 +108,10 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
    - **data** (`.csv`, `.tsv`, `.jsonl`, `.parquet`, JSON arrays) → *profiled* into columns, types, row counts and sample values. The rows never enter the analysis, so a 40 MB seed costs kilobytes of context;
    - **skipped** — VCS/dependency directories, binaries, lock files (`package-lock.json`, `poetry.lock`…), `.txt`, dbt `target/` artifacts other than the manifest, minified files and `.sql` files that are really bulk `INSERT` dumps.
 
+   dbt's Jinja templates are resolved the same way: `{{ env_var('X', 'default') }}`
+   yields its default literal; anything unresolvable (no default, conditionals) is
+   dropped rather than shown raw — a hint we cannot honour never becomes a lie in the UI.
+
    A seed CSV that resolves to a live table later adds a **contract check**: any column the file promises but the warehouse lacks is real drift. Uploads can also be sent as `mode=files`, where the user's explicit selection overrides the classification (binaries and hard size caps still apply).
 
    Connections are pasted as a URL (`postgresql://user:pw@host:5432/db`), a JSON spec, or loose `host=… port=… user=… password=…`. Credentials are stored as secrets and never echoed back.
