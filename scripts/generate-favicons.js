@@ -45,6 +45,9 @@ function encodePNG(imgData, width, height) {
   // PNG chunks
   const chunks = [];
   
+  // Signature: every PNG must start with these 8 bytes or readers reject it.
+  chunks.push(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  
   // IHDR
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
@@ -73,7 +76,7 @@ function makeChunk(type, data) {
   const crc = Buffer.alloc(4);
   const crcInput = Buffer.concat([typeBuf, data]);
   const crcVal = crc32(crcInput) >>> 0;
-  crc.writeUInt32BE(crc >>> 0, 0);
+  crc.writeUInt32BE(crcVal, 0);
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 
@@ -219,7 +222,7 @@ if (require.main === module) {
   const icoHeader = Buffer.alloc(6);
   icoHeader.writeUInt16LE(0, 0); // reserved
   icoHeader.writeUInt16LE(1, 2); // type = 1 (ICO)
-  icoHeader.writeUInt16LE(icoDirs.length, 2); // count
+  icoHeader.writeUInt16LE(icoDirs.length, 4); // count
   
   let dirData = Buffer.alloc(icoDirs.length * 16);
   let imageData = Buffer.alloc(0);

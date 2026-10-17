@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Question, QuestionOption } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -33,13 +33,27 @@ export function QuestionCard({
   onSkip?: () => void;
 }) {
   const options = question.options ?? [];
-  const [active, setActive] = useState(options[0]?.kind ?? 'git_url');
+  const [activeRaw, setActive] = useState(options[0]?.kind ?? 'git_url');
+  // The agent asks several questions in sequence; a stale tab from the previous
+  // question would route `submit()` to the wrong handler (e.g. posting a DB URL
+  // to the git endpoint). Resolve against the current question's options.
+  const active = options.some((o) => o.kind === activeRaw)
+    ? activeRaw
+    : (options[0]?.kind ?? 'git_url');
   const [url, setUrl] = useState('');
   const [ref, setRef] = useState('');
   const [token, setToken] = useState('');
   const [picked, setPicked] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // start each new question with a clean form
+  useEffect(() => {
+    setUrl('');
+    setRef('');
+    setToken('');
+    setPicked([]);
+  }, [question.id]);
 
   const activeOption = options.find((o) => o.kind === active) ?? options[0];
   const canSubmit =
@@ -56,7 +70,13 @@ export function QuestionCard({
   };
 
   return (
-    <div className="surface animate-fade-up overflow-hidden">
+    <form
+      className="surface animate-fade-up overflow-hidden"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
       <div className="border-b bg-accent/[0.04] px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="chip bg-accent/12 text-accent">
@@ -72,6 +92,7 @@ export function QuestionCard({
           {options.map((o) => (
             <button
               key={o.kind}
+              type="button"
               onClick={() => setActive(o.kind)}
               className={cn(
                 'rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors',
@@ -126,7 +147,7 @@ export function QuestionCard({
               Drop <code className="font-mono">.sql</code>,{' '}
               <code className="font-mono">.py</code> or dbt YAML files here
             </p>
-            <button className="btn-ghost mt-3" onClick={() => fileRef.current?.click()}>
+            <button type="button" className="btn-ghost mt-3" onClick={() => fileRef.current?.click()}>
               Choose files
             </button>
             <input
@@ -158,7 +179,7 @@ export function QuestionCard({
               Paste a script into the box below. One self-contained SQL/Python file works;
               anything bigger is better given to me as a repo or a set of files.
             </p>
-            <button className="btn-ghost mt-3" onClick={onPaste}>
+            <button type="button" className="btn-ghost mt-3" onClick={onPaste}>
               Focus the input
             </button>
           </div>
@@ -177,11 +198,11 @@ export function QuestionCard({
       </div>
 
       <div className="flex items-center gap-2 border-t px-4 py-2.5">
-        <button className="btn-primary" onClick={submit} disabled={!canSubmit}>
+        <button type="submit" className="btn-primary" disabled={!canSubmit}>
           {status.busy ? 'Working…' : activeOption?.kind === 'connection' ? 'Test & connect' : 'Analyse'}
         </button>
         {question.skip_allowed && onSkip && (
-          <button className="btn-ghost" onClick={onSkip} disabled={status.busy}>
+          <button type="button" className="btn-ghost" onClick={onSkip} disabled={status.busy}>
             Skip for now
           </button>
         )}
@@ -193,7 +214,7 @@ export function QuestionCard({
               : ''}
         </span>
       </div>
-    </div>
+    </form>
   );
 }
 
