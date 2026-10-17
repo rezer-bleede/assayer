@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.connectors.factory import SUPPORTED_SOURCES, build_connector
 from app.core.logging import log
+from app.core.routes import SafeAPIRoute
 from app.schemas import ConnectionSpec, ConnectionStatus
 from app.services.ingest import _SCHEME_MAP, extract_connections
 from app.services.requirements import split_ref
@@ -17,7 +18,9 @@ from app.store import repository as repo
 def _bare(ref: str) -> str:
     return split_ref(str(ref))[1] or str(ref).lower()
 
-router = APIRouter(prefix="/api/connections", tags=["connections"])
+router = APIRouter(
+    prefix="/api/connections", tags=["connections"], route_class=SafeAPIRoute
+)
 
 
 class TestConnectionRequest(BaseModel):

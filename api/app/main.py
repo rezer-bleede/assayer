@@ -9,39 +9,15 @@ import orjson
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
-from fastapi.routing import APIRoute
 
 from app.core.config import settings
 from app.core.llm import llm_available
 from app.core.logging import configure_logging, log
+from app.core.routes import SafeAPIRoute
 from app.routers import chat, connections, etl, runs
 from app.store.db import init_db
 
 configure_logging()
-
-
-class SafeAPIRoute(APIRoute):
-    """Never leak stack traces or credentials in error bodies."""
-
-    def get_route_handler(self):  # type: ignore[no-untyped-def]
-        original = super().get_route_handler()
-
-        async def handler(request: Request) -> Any:
-            try:
-                return await original(request)
-            except Exception as exc:  # noqa: BLE001
-                log.exception("request failed", path=request.url.path)
-                return ORJSONResponse(
-                    status_code=500,
-                    content={
-                        "error": "internal_error",
-                        "type": type(exc).__name__,
-                        "message": str(exc)[:400],
-                        "path": request.url.path,
-                    },
-                )
-
-        return handler
 
 
 @contextlib.asynccontextmanager

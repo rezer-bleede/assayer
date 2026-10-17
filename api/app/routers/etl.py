@@ -8,13 +8,14 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.logging import log
+from app.core.routes import SafeAPIRoute
 from app.parsers import analyze_etl
 from app.schemas import EtlAnalysis, EtlLanguage, EtlSubmit, SourceRequirement
 from app.services.repo_fetch import RepoError, fetch
 from app.services.source_filter import assemble_sources, profile_summary
 from app.store import repository as repo
 
-router = APIRouter(prefix="/api/etl", tags=["etl"])
+router = APIRouter(prefix="/api/etl", tags=["etl"], route_class=SafeAPIRoute)
 
 # Absolute ceiling for one uploaded file. The per-kind caps (code vs data) are
 # applied by the filter, but by then the body is already in memory.
@@ -35,13 +36,24 @@ def _detect_language(files: dict[str, str], manifest: dict | None) -> EtlLanguag
     return EtlLanguage.SQL
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
-def analyze(req: EtlSubmit, session_id: str | None = None) -> AnalyzeResponse:
+def _parse(submit: EtlSubmit) -> EtlAnalysis:
+    """Parse, or fail as a clean 400 — never a 500 on user-supplied content.
+
+    Repo code is hostile-shaped by definition (a folder the user picked, a
+    clone of a stranger's project); a parser exception is an input problem,
+    and it must arrive as one — with CORS headers intact — not as an opaque
+    server error the browser reports as a policy violation.
+    """
     try:
-        analysis = analyze_etl(req)
+        return analyze_etl(submit)
     except Exception as exc:  # noqa: BLE001
         log.warning("etl analysis failed", error=str(exc))
         raise HTTPException(400, f"could not parse ETL: {exc}") from exc
+
+
+@router.post("/analyze", response_model=AnalyzeResponse)
+def analyze(req: EtlSubmit, session_id: str | None = None) -> AnalyzeResponse:
+    analysis = _parse(req)
     repo.save_etl(analysis, session_id)
     return AnalyzeResponse(analysis=analysis, required_sources=analysis.required_sources)
 
@@ -78,7 +90,7 @@ async def from_repo(req: RepoRequest) -> AnalyzeResponse:
         raise HTTPException(502, f"could not fetch repository: {scrub(str(exc))}") from exc
 
     language = _detect_language(content.files, content.manifest)
-    analysis = analyze_etl(
+    analysis = _parse(
         EtlSubmit(
             language=language,
             files=content.files,
@@ -183,7 +195,7 @@ async def upload(
         )
 
     language = _detect_language(contents, manifest)
-    analysis = analyze_etl(
+    analysis = _parse(
         EtlSubmit(
             language=language,
             files=contents,

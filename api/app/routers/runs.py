@@ -8,11 +8,14 @@ from pydantic import BaseModel, Field
 from app.agent.plan_builder import build_plan
 from app.agent.planner import bind_sources, find_unresolved
 from app.core.logging import log
+from app.core.routes import SafeAPIRoute
 from app.schemas import ConnectionSpec, RunResult, RunStatus, TestPlan
 from app.services.orchestrator import introspect_all, profile_focus, run_audit
 from app.store import repository as repo
 
-router = APIRouter(prefix="/api/runs", tags=["runs"])
+router = APIRouter(
+    prefix="/api/runs", tags=["runs"], route_class=SafeAPIRoute
+)
 
 
 class PlanRequest(BaseModel):

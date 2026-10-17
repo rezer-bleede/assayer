@@ -168,6 +168,44 @@ def test_upload_rejects_an_enormous_file_with_a_clear_message() -> None:
     assert "per-file upload limit" in exc.value.detail
 
 
+def test_unknown_dbt_adapter_does_not_bubble_out_of_the_route() -> None:
+    """The clickhouse profiles.yml that once crashed uploads must analyse."""
+    files = [
+        ("shop/dbt_project.yml", b"name: shop\n"),
+        ("shop/models/stg_orders.sql", b"select * from {{ source('raw','orders') }}"),
+        (
+            "shop/profiles.yml",
+            b"shop:\n  target: dev\n  outputs:\n    dev:\n"
+            b"      type: clickhouse\n      host: ch.internal\n"
+            b"      port: 9000\n      database: analytics\n      schema: raw\n",
+        ),
+    ]
+    res = _call(files)
+    req = res.required_sources[0]
+    assert req.engine_hint is None
+    assert req.host_hint == "ch.internal"
+    assert req.port_hint == 9000
+
+
+def test_malformed_source_fails_as_400_not_500() -> None:
+    """Parser exceptions are input problems — no opaque server errors."""
+    from app.routers.etl import _parse
+    from app.schemas import EtlSubmit
+
+    monkey_original = etl_router.analyze_etl
+    try:
+        def _boom(submit):
+            raise RuntimeError("parser choked")
+
+        etl_router.analyze_etl = _boom
+        with pytest.raises(HTTPException) as exc:
+            _parse(EtlSubmit(language="sql", code="SELECT 1"))
+    finally:
+        etl_router.analyze_etl = monkey_original
+    assert exc.value.status_code == 400
+    assert "could not parse ETL" in exc.value.detail
+
+
 def test_upload_rejects_an_empty_request() -> None:
     with pytest.raises(HTTPException) as exc:
         _call([])

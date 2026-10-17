@@ -36,6 +36,22 @@ def _clean(part: str | None) -> str | None:
     return part.strip('`"[]').lower() or None
 
 
+def _engine_type(raw: object) -> SourceType | None:
+    """Best-effort engine hint.
+
+    dbt projects name adapters we cannot connect to — `clickhouse`, `redshift`,
+    `trino`, `presto`, `oracle` … The *host + database* evidence is still real
+    and must survive the parse; only the engine prefill is dropped. A crash
+    here would take down the whole upload for a hint that is, at worst, wrong.
+    """
+    if not raw:
+        return None
+    try:
+        return SourceType(str(raw))
+    except ValueError:
+        return None
+
+
 def split_ref(ref: str) -> tuple[str | None, str]:
     """`raw.orders` -> (`raw`, `orders`); `orders` -> (None, `orders`)."""
     m = _SPLIT_RE.match(ref.strip())
@@ -137,7 +153,7 @@ def derive_requirements(analysis: EtlAnalysis) -> list[SourceRequirement]:
             if g["confidence"] < 0.9:
                 g["confidence"] = 0.75
         if matched:
-            engine = SourceType(matched["type"]) if matched.get("type") else None
+            engine = _engine_type(matched.get("type"))
             host, database = matched.get("host"), matched.get("database") or g["database"]
             port, user = matched.get("port"), matched.get("username")
             g["origin"] = "engine url in code"

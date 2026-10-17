@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from app.agent.plan_builder import build_plan
 from app.agent.planner import find_unresolved
 from app.core.logging import log
+from app.core.routes import SafeAPIRoute
 from app.parsers import analyze_etl
 from app.schemas import (
     ChatMessage,
@@ -52,7 +53,7 @@ from app.services.source_filter import profile_summary
 from app.store import repository as repo
 from app.store.db import utcnow_str
 
-router = APIRouter(tags=["chat"])
+router = APIRouter(tags=["chat"], route_class=SafeAPIRoute)
 
 # words that mean "go" when a plan is already on file
 AFFIRMATIVE = {
