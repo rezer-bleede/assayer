@@ -223,7 +223,7 @@ def looks_like_code(text: str, min_len: int = 40) -> bool:
 
 # a whole-field Jinja placeholder whose env_var has a default literal
 _ENV_VAR_DEFAULT_RE = re.compile(
-    r"^\{\{\s*env_var\(\s*['\"]\w+['\"]\s*,\s*['\"](?P<default>[^'\"]*)['\"]\s*\)"
+    r"^\{\{\s*env_var\(\s*['\"]\w+['\"]\s*,\s*(?:default\s*=\s*)?['\"](?P<default>[^'\"]*)['\"]\s*\)"
     r"(?:\s*\|\s*(?:int|as_number|as_text|string))?\s*\}\}$",
     re.I,
 )

@@ -129,6 +129,9 @@ def test_jinja_value_recovers_env_var_defaults() -> None:
     assert jinja_value("{{ env_var('CLICKHOUSE_PORT', '8123') | int }}") == "8123"
     assert jinja_value('{{ env_var("PG_HOST", "db.internal") }}') == "db.internal"
     assert jinja_value("{{ env_var('X', '9000') | as_number }}") == "9000"
+    # dbt documents the keyword spelling too
+    assert jinja_value("{{ env_var('X', default='8123') }}") == "8123"
+    assert jinja_value("{{ env_var('X', default='8123') | int }}") == "8123"
 
 
 def test_jinja_value_drops_unrecoverable_templates() -> None:
