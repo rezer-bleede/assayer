@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    # --- app ---
+    app_name: str = "data-qualitest-agent"
+    environment: str = "development"
+    secret_key: str = "change-me"
+    cors_origins: str = "*"
+    log_level: str = "INFO"
+
+    # --- state store ---
+    database_url: str = "postgresql+psycopg://qualitest:qualitest@db:5432/qualitest"
+    redis_url: str = "redis://redis:6379/0"
+
+    # --- llm (bring your own key / openai-compatible / ollama) ---
+    llm_provider: str = "openai"
+    llm_base_url: str | None = "https://api.openai.com/v1"
+    llm_api_key: str | None = None
+    llm_model: str = "gpt-4o-mini"
+    llm_temperature: float = 0.1
+
+    # --- run limits ---
+    run_max_checks: int = 200
+    run_query_timeout_seconds: int = 300
+    run_max_row_sample: int = 20
+    run_max_concurrency: int = 4
+
+    # --- git intake: cloning is network-bound and unbounded by default ---
+    repo_enabled: bool = True
+    repo_max_files: int = 400
+    repo_max_file_bytes: int = 256_000
+    repo_max_total_bytes: int = 4_000_000
+    repo_clone_timeout_seconds: int = 120
+    repo_tmp_dir: str = "/tmp/qualitest-repos"
+    # RFC1918 is allowed by default (internal GitLab/GitHub Enterprise are the
+    # common case), but cloud metadata + loopback are always refused.
+    repo_allow_private_hosts: bool = True
+
+    @field_validator("llm_base_url", mode="before")
+    @classmethod
+    def _blank_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
+    @field_validator("llm_api_key", mode="before")
+    @classmethod
+    def _blank_key_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        raw = (self.cors_origins or "*").strip()
+        if raw == "*":
+            return ["*"]
+        return [o.strip() for o in raw.split(",") if o.strip()]
+
+    @property
+    def llm_configured(self) -> bool:
+        if self.llm_provider.lower() == "ollama":
+            return bool(self.llm_base_url)
+        return bool(self.llm_api_key and self.llm_base_url)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

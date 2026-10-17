@@ -1,0 +1,69 @@
+[project]
+name = "data-qualitest-agent-api"
+version = "0.1.0"
+description = "Agentic data testing and data quality auditing tool"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "httpx>=0.27",
+    "sse-starlette>=2.1",
+    "python-multipart>=0.0.9",
+    "sqlalchemy>=2.0.32",
+    "psycopg[binary]>=3.2",
+    "sqlglot>=25.5",
+    "langgraph>=0.2.28,<1",
+    "langchain-core>=0.3.9,<1",
+    "langchain-openai>=0.2.2,<1",
+    "structlog>=24.4",
+    "orjson>=3.10",
+    "pyyaml>=6.0",
+    "redis>=5.0",
+    "tenacity>=8.5",
+]
+
+[project.optional-dependencies]
+mysql = ["pymysql>=1.1.1", "cryptography>=43.0"]
+snowflake = ["snowflake-sqlalchemy>=1.6.0", "snowflake-connector-python[pandas]>=3.10.0"]
+bigquery = ["google-cloud-bigquery>=3.24.0"]
+databricks = ["databricks-sql-connector>=3.6.0"]
+s3 = ["boto3>=1.35"]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "aiosqlite>=0.20",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# `examples/` is mounted into the container at runtime; those files are
+# documentation snippets, not part of the application.
+extend-exclude = ["examples"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+ignore = ["B008", "E501"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

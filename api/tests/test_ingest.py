@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+from app.schemas import EtlSubmit
+from app.services.ingest import (
+    extract_connections,
+    guess_language,
+    looks_like_code,
+    parse_url,
+)
+
+
+def test_parse_postgres_url() -> None:
+    spec = parse_url("postgresql://alice:s3cr3t@db.internal:5433/analytics?schema=public")
+    assert spec is not None
+    assert spec.type == "postgres"
+    assert spec.host == "db.internal"
+    assert spec.port == 5433
+    assert spec.database == "analytics"
+    assert spec.username == "alice"
+    assert spec.password.get_secret_value() == "s3cr3t"
+    assert spec.schema_ == "public"
+
+
+def test_parse_mysql_url() -> None:
+    spec = parse_url("mysql://root:pw@127.0.0.1:3306/shop")
+    assert spec is not None and spec.type == "mysql"
+    assert spec.port == 3306
+
+
+def test_password_is_redacted() -> None:
+    spec = parse_url("postgresql://u:secret@h:5432/d")
+    assert spec is not None
+    assert spec.redacted()["password"] == "***"
+
+
+def test_extract_multiple_connections_from_chat_text() -> None:
+    text = """
+    Here is staging: postgresql://rw:pw1@stg.db:5432/warehouse
+    and prod: mysql://ro:pw2@prod.db:3306/reports
+    """
+    specs = extract_connections(text)
+    assert {str(s.type) for s in specs} == {"postgres", "mysql"}
+
+
+def test_extract_json_connection_block() -> None:
+    text = """use this one:
+```json
+{"type": "postgres", "name": "wh", "host": "h", "port": 5432,
+ "database": "d", "username": "u", "password": "p"}
+```"""
+    specs = extract_connections(text)
+    assert any(s.name == "wh" and s.host == "h" for s in specs)
+
+
+def test_extract_bare_credentials() -> None:
+    text = "the postgres host is warehouse.internal port 5432 database dw user analyst password hunter2"
+    specs = extract_connections(text)
+    assert specs, "expected a spec from bare credentials"
+    s = specs[0]
+    assert s.host == "warehouse.internal"
+    assert s.database == "dw"
+    assert s.password.get_secret_value() == "hunter2"
+
+
+def test_guess_language() -> None:
+    assert str(guess_language("SELECT a FROM b JOIN c ON 1=1")) == "sql"
+    assert str(guess_language("import pandas as pd\npd.read_sql(x)")) == "python"
+    assert str(guess_language("{{ ref('stg_orders') }}")) == "dbt"
+
+
+def test_looks_like_code() -> None:
+    assert looks_like_code("SELECT id, amount FROM raw.orders WHERE amount > 0 LIMIT 10")
+    assert not looks_like_code("hello there, can you run the audit please?")
+    assert not looks_like_code("SELECT")  # too short to be a real script
+
+
+def test_etl_submit_roundtrip() -> None:
+    submit = EtlSubmit(language="sql", code="SELECT 1")
+    assert submit.language == "sql"
