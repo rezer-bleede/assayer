@@ -16,6 +16,35 @@ Provide your data connection details and ETL code/script — the agent figures o
 
 </div>
 
+## Key Use Cases & Capabilities
+
+<table width="100%">
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <h3>1. ETL Lineage & Transformation Parsing</h3>
+      <img src="docs/assets/usecase1-etl-lineage.gif" alt="ETL Lineage & Transformation Parsing" width="100%" />
+      <p><i>Parse SQL queries, Python AST, & dbt models into table/column lineage and flag transformation risks automatically.</i></p>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <h3>2. Data Source Profiling & Drift Detection</h3>
+      <img src="docs/assets/usecase2-data-profiling.gif" alt="Data Source Profiling & Drift Detection" width="100%" />
+      <p><i>Profile live databases and seed files (CSV/Parquet) to inspect distributions and verify schema contracts.</i></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <h3>3. Automated Test Planning & Approval</h3>
+      <img src="docs/assets/usecase3-test-planning.gif" alt="Automated Test Planning & Approval" width="100%" />
+      <p><i>Synthesize baseline & LLM-augmented test suites with human-in-the-loop review before execution.</i></p>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <h3>4. Read-Only Audit & Scorecard Reporting</h3>
+      <img src="docs/assets/usecase4-audit-reporting.gif" alt="Read-Only Audit & Scorecard Reporting" width="100%" />
+      <p><i>Execute non-destructive probes, capture failure row samples, score quality (0–100), and generate AI root-cause analysis.</i></p>
+    </td>
+  </tr>
+</table>
+
 ## Quick start
 
 ```bash
