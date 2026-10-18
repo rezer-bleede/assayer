@@ -140,6 +140,32 @@ def test_native_port_failure_names_the_http_interface(fake_driver, monkeypatch) 
     assert "8123" not in str(exc.value)
 
 
+# --- environmental hints ------------------------------------------------------ #
+
+
+def test_localhost_refusal_explains_the_container_boundary(fake_driver, monkeypatch) -> None:
+    """Refusing localhost is a container problem, and the error must say so."""
+    def refusing_get_client(**kwargs: Any) -> _FakeClient:
+        raise ConnectionError("HTTPConnection(host='localhost', port=8123): "
+                              "Failed to establish a new connection: Connection refused")
+
+    mod = types.ModuleType("clickhouse_connect")
+    mod.get_client = refusing_get_client  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "clickhouse_connect", mod)
+
+    status = ClickHouseConnector(_spec(host="localhost", port=8123)).test()
+    assert status.ok is False
+    assert "host.docker.internal" in (status.message or "")
+
+    # a refusal from a named remote host is a normal failure: no container hint
+    mod2 = types.ModuleType("clickhouse_connect")
+    mod2.get_client = refusing_get_client  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "clickhouse_connect", mod2)
+    status = ClickHouseConnector(_spec(host="ch.internal", port=8123)).test()
+    assert status.ok is False
+    assert "host.docker.internal" not in (status.message or "")
+
+
 # --- introspection shape ----------------------------------------------------- #
 
 
@@ -175,6 +201,25 @@ def test_params_are_refused_not_ignored(fake_driver) -> None:
     conn = _conn()
     with pytest.raises(ConnectorError, match="inline"):
         conn.query("SELECT {x}", {"x": 1})
+
+
+def test_driver_1_11_result_shape(fake_driver) -> None:
+    """clickhouse-connect 1.x moved the named columns to `column_names`;
+    `result_columns` is now the column-major *values*. Both shapes must zip."""
+    class _NewShape:
+        column_names = ("a", "b")
+        result_columns = [[1, 2], ["x", "y"]]  # values, not names
+        result_rows = [(1, "x"), (2, "y")]
+
+    class _FakeNew(_FakeClient):
+        def query(self, sql: str, parameters: dict[str, Any] | None = None) -> Any:
+            return _NewShape()
+
+    conn = _conn()
+    conn._client = _FakeNew()  # type: ignore[assignment]
+    res = conn.query("SELECT a, b FROM t")
+    assert res.columns == ["a", "b"]
+    assert res.rows == [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]
 
 
 def test_dispose_closes_client(fake_driver) -> None:

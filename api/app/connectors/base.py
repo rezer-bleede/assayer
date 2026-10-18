@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import abc
 import contextlib
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -125,7 +126,7 @@ class Connector(abc.ABC):
                 type=self.source_type,
                 name=self.spec.name,
                 latency_ms=round((time.perf_counter() - start) * 1000, 2),
-                message=_friendly_error(exc),
+                message=_friendly_error(exc, spec=self.spec),
             )
 
     def introspect(
@@ -182,9 +183,39 @@ class Connector(abc.ABC):
         return {"schemas": schemas, "schema": schema or self.resolve_schema(None), "tables": tables}
 
 
-def _friendly_error(exc: Exception) -> str:
+def _friendly_error(exc: Exception, spec: ConnectionSpec | None = None) -> str:
     msg = str(exc).strip().splitlines()[0] if str(exc) else exc.__class__.__name__
-    return msg[:400]
+    msg = msg[:400]
+    if spec is not None and (hint := localhost_hint(spec, msg)):
+        msg = f"{msg} — {hint}"
+    return msg
+
+
+# Whoever runs the agent runs it in a container. "localhost" inside a
+# container is the container itself: a database on the user's machine (or on
+# another container's published port) is *never* under that name. A refusal
+# against localhost therefore earns an explicit environmental explanation —
+# the single most common connection failure, and the most baffling otherwise.
+_LOCALHOST_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+_UNREACHABLE_RE = re.compile(
+    r"refused|unreachable|no route to host|cannot assign requested address|timed?\s?-?out",
+    re.I,
+)
+
+
+def localhost_hint(spec: ConnectionSpec, error_text: str) -> str | None:
+    """Explain *why* localhost could fail given the containerized agent."""
+    host = (spec.host or "").lower().strip()
+    if not host or host.rstrip(".") not in _LOCALHOST_HOSTS:
+        return None
+    if not _UNREACHABLE_RE.search(error_text):
+        return None
+    return (
+        "'localhost' here is the agent's own container — a database on your "
+        "machine never answers that name from inside it. If the database runs "
+        "on your host (Docker Desktop) use 'host.docker.internal' instead; "
+        "another container's service name works too."
+    )
 
 
 def scalar(res: QueryResult, default: float | None = None) -> float | None:

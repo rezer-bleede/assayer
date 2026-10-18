@@ -15,7 +15,7 @@ import contextlib
 import time
 from typing import Any
 
-from app.connectors.base import Connector, ConnectorError, QueryResult
+from app.connectors.base import Connector, ConnectorError, QueryResult, localhost_hint
 from app.schemas import ColumnInfo, ConnectionSpec, SourceType
 
 # ClickHouse exposes these as databases, not as user data worth sweeping
@@ -81,6 +81,8 @@ class ClickHouseConnector(Connector):
                         f"which does not speak HTTP; use the HTTP port (default 8123, "
                         f"TLS 8443)"
                     )
+                if hint := localhost_hint(self.spec, msg):
+                    msg = f"{msg}.\n{hint}"
                 raise ConnectorError(msg) from exc
         return self._client
 
@@ -91,6 +93,19 @@ class ClickHouseConnector(Connector):
             self._client = None
 
     # -- introspection (system.*; ClickHouse has no information_schema) ----- #
+    @staticmethod
+    def _column_names(res: Any) -> list[str]:
+        """Column names across driver versions.
+
+        clickhouse-connect renamed things under us: older releases put the
+        column *names* in `result_columns`, while 1.11 puts the column-major
+        *values* there and moves the names to `column_names`. Trust
+        `column_names` when the driver provides it; otherwise
+        `result_columns` already holds the names.
+        """
+        names = getattr(res, "column_names", None)
+        return list(names) if names else list(res.result_columns)
+
     def _rows(self, sql: str) -> list[dict[str, Any]]:
         try:
             res = self._connection().query(sql)
@@ -98,7 +113,7 @@ class ClickHouseConnector(Connector):
             raise
         except Exception as exc:  # noqa: BLE001
             raise ConnectorError(f"clickhouse query failed: {exc}") from exc
-        cols = list(res.result_columns)
+        cols = self._column_names(res)
         return [dict(zip(cols, row, strict=False)) for row in res.result_rows]
 
     def list_schemas(self) -> list[str]:
@@ -164,7 +179,7 @@ class ClickHouseConnector(Connector):
             raise
         except Exception as exc:  # noqa: BLE001
             raise ConnectorError(f"clickhouse query failed: {exc}") from exc
-        cols = list(res.result_columns)
+        cols = self._column_names(res)
         rows = [dict(zip(cols, row, strict=False)) for row in res.result_rows[:1000]]
         return QueryResult(
             columns=cols,
