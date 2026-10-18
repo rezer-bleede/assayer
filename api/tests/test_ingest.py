@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from app.schemas import EtlSubmit, SourceType
 from app.services.ingest import (
     extract_connections,
+    extract_connections_async,
     guess_language,
     looks_like_code,
     parse_url,
@@ -80,14 +83,14 @@ def test_etl_submit_roundtrip() -> None:
     submit = EtlSubmit(language="sql", code="SELECT 1")
     assert submit.language == "sql"
 
-def test_from_url_connects_when_parseable() -> None:
+async def test_from_url_connects_when_parseable() -> None:
     """A URL-shaped input parses and *attempts* a connection (which then fails)."""
     from fastapi import HTTPException
 
     from app.routers.connections import FromUrlRequest, connect_from_url
 
     try:
-        connect_from_url(
+        await connect_from_url(
             FromUrlRequest(url="postgresql://u:p@no-such-host.invalid:5432/db")
         )
     except HTTPException as exc:
@@ -97,25 +100,25 @@ def test_from_url_connects_when_parseable() -> None:
         pass  # any driver/DNS error means parsing succeeded and connect was tried
 
 
-def test_from_url_rejects_unsupported_scheme_with_clear_message() -> None:
+async def test_from_url_rejects_unsupported_scheme_with_clear_message() -> None:
     from fastapi import HTTPException
 
     from app.routers.connections import FromUrlRequest, connect_from_url
 
     with pytest.raises(HTTPException) as exc:
-        connect_from_url(FromUrlRequest(url="mongodb://u:p@host/db"))
+        await connect_from_url(FromUrlRequest(url="mongodb://u:p@host/db"))
     assert exc.value.status_code == 422
     assert "mongodb" in exc.value.detail
     assert "postgres" in exc.value.detail  # lists what IS supported
 
 
-def test_from_url_rejects_non_url_with_clear_message() -> None:
+async def test_from_url_rejects_non_url_with_clear_message() -> None:
     from fastapi import HTTPException
 
     from app.routers.connections import FromUrlRequest, connect_from_url
 
     with pytest.raises(HTTPException) as exc:
-        connect_from_url(FromUrlRequest(url="just some words about my database"))
+        await connect_from_url(FromUrlRequest(url="just some words about my database"))
     assert exc.value.status_code == 422
     assert "connection URL" in exc.value.detail
 
@@ -196,3 +199,148 @@ def test_coerce_port() -> None:
     assert coerce_port(0) is None
     assert coerce_port(70000) is None
     assert coerce_port(None) is None
+
+
+# --------------------------------------------------------------------------- #
+# engine word evidence + client-constructor extraction
+# --------------------------------------------------------------------------- #
+
+
+def test_engine_word_guess_single_family() -> None:
+    from app.services.ingest import engine_word_guess
+
+    assert engine_word_guess("client = clickhouse_connect.get_client(...)") is (
+        SourceType.CLICKHOUSE
+    )
+    assert engine_word_guess("we log into postgresql nightly") is SourceType.POSTGRES
+    assert engine_word_guess("duckdb import duckdb") is SourceType.SQLITE
+
+
+def test_engine_word_guess_rejects_ambiguity_and_silence() -> None:
+    from app.services.ingest import engine_word_guess
+
+    # two different engines mentioned -> no honest answer
+    assert engine_word_guess("postgres on prod, clickhouse on analytics") is None
+    assert engine_word_guess("select 1") is None
+    assert engine_word_guess("") is None
+
+
+def test_engine_word_guess_module_names_and_extensions() -> None:
+    from app.services.ingest import engine_word_guess
+
+    # module names count as evidence
+    assert engine_word_guess("import clickhouse_connect") is SourceType.CLICKHOUSE
+    # longer identifiers after the engine name are not engine mentions
+    assert engine_word_guess("the clickhousedb project docs") is None
+
+
+_CLIENT_SNIPPET = """
+import clickhouse_connect
+client = clickhouse_connect.get_client(
+    host='warehouse.internal',
+    port=8123,
+    username='analyst',
+    database='property_intel',
+    password='s3cret',
+)
+"""
+
+
+def test_get_client_literal_call_yields_redacted_spec() -> None:
+    specs = extract_connections(_CLIENT_SNIPPET)
+    spec = next(s for s in specs if s.type is SourceType.CLICKHOUSE)
+    assert spec.host == "warehouse.internal"
+    assert spec.port == 8123
+    assert spec.username == "analyst"
+    assert spec.database == "property_intel"
+    # secrets inside the user's code are never lifted into a spec
+    assert spec.password is None
+
+
+def test_get_client_requires_a_literal_host() -> None:
+    from app.services.ingest import _client_call_specs
+
+    # unquoted runtime variables: we cannot know their values, so no spec
+    assert _client_call_specs("clickhouse_connect.get_client(host=CH_HOST, port=PORT)") == []
+    # no host at all: nothing to connect to
+    assert _client_call_specs("clickhouse_connect.get_client(database='d')") == []
+
+
+# --------------------------------------------------------------------------- #
+# New tests: trailing-text URL, LLM fallback
+# --------------------------------------------------------------------------- #
+
+
+def test_parse_url_strips_trailing_prose_from_database() -> None:
+    """Trailing natural-language text after the DB name must not leak in."""
+    # Simulates:  clickhouse://host/property_intelI expect: my_schema.table
+    spec = parse_url("clickhouse://analyst:pw@ch.internal:8123/property_intelI")
+    # The regex lookahead should stop at the camelCase boundary before 'I'
+    assert spec is not None
+    assert spec.database is not None
+    assert spec.database == "property_intel", (
+        f"Expected 'property_intel', got {spec.database!r}"
+    )
+
+
+def test_extract_connections_trailing_sentence() -> None:
+    """Full URL followed immediately by prose doesn't corrupt the database field."""
+    text = "clickhouse://u:pw@ch.host:8123/analytics_db  I expect this to be the main DB."
+    specs = extract_connections(text)
+    assert specs, "expected at least one spec"
+    # The database must not include the trailing sentence
+    assert specs[0].database == "analytics_db"
+
+
+async def test_extract_connections_async_delegates_deterministic() -> None:
+    """When deterministic parsing succeeds, async wrapper returns same results."""
+    text = "postgresql://u:pw@db.host:5432/mydb"
+    specs = await extract_connections_async(text)
+    assert specs
+    assert specs[0].type == SourceType.POSTGRES
+    assert specs[0].database == "mydb"
+
+
+async def test_extract_connections_async_llm_fallback() -> None:
+    """When deterministic parsing fails, the LLM is invoked for unstructured text.
+
+    We stub ``app.core.llm`` in ``sys.modules`` so this test does not require
+    ``structlog`` (which is an optional dependency in the test environment).
+    """
+    import sys
+    import types
+
+    import app.services.ingest as ingest_mod
+
+    freeform = (
+        "Hey, our analytics cluster is clickhouse running on analytics.internal "
+        "port 9000 database property_intel user analyst password s3cret."
+    )
+
+    llm_response = (
+        '[{"type": "clickhouse", "name": "ch-llm", "host": "analytics.internal", '
+        '"port": 9000, "database": "property_intel", "username": "analyst", '
+        '"password": "s3cret"}]'
+    )
+
+    # Build a minimal fake app.core.llm module
+    fake_llm = types.ModuleType("app.core.llm")
+    fake_llm.llm_available = lambda: True  # type: ignore[attr-defined]
+    fake_llm.ainvoke = AsyncMock(return_value=llm_response)  # type: ignore[attr-defined]
+
+    # Inject the stub before the local import inside extract_connections_async runs
+    original = sys.modules.get("app.core.llm", None)
+    sys.modules["app.core.llm"] = fake_llm
+    try:
+        with patch.object(ingest_mod, "extract_connections", return_value=[]):
+            specs = await ingest_mod.extract_connections_async(freeform)
+    finally:
+        if original is None:
+            del sys.modules["app.core.llm"]
+        else:
+            sys.modules["app.core.llm"] = original
+
+    assert specs, "expected LLM extraction to yield at least one spec"
+    assert specs[0].type == SourceType.CLICKHOUSE
+    assert specs[0].host == "analytics.internal"
+    assert specs[0].database == "property_intel"

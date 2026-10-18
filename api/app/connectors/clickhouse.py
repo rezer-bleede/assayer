@@ -30,6 +30,13 @@ def _q_str(value: str) -> str:
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
+# ClickHouse's native TCP protocol (9000 family) is a different wire protocol
+# from the HTTP interface the clickhouse-connect driver speaks. Connecting
+# here fails even when the server is perfectly healthy, so failure on these
+# ports earns an explicit explanation, not just a raw socket error.
+_NATIVE_TCP_PORTS = {9000, 9009, 9440}
+
+
 class ClickHouseConnector(Connector):
     source_type = SourceType.CLICKHOUSE
 
@@ -61,7 +68,20 @@ class ClickHouseConnector(Connector):
                     settings={"readonly": int(options.get("readonly", 2))},
                 )
             except Exception as exc:  # noqa: BLE001 - surfaced as ConnectorError
-                raise ConnectorError(f"cannot connect to ClickHouse: {exc}") from exc
+                msg = f"cannot connect to ClickHouse: {exc}"
+                try:
+                    port = int(port) if port is not None else None
+                except (TypeError, ValueError):
+                    port = None
+                if port in _NATIVE_TCP_PORTS or (
+                    port is not None and 9000 <= port <= 9099
+                ):
+                    msg += (
+                        f" — port {port} looks like the ClickHouse native TCP interface, "
+                        f"which does not speak HTTP; use the HTTP port (default 8123, "
+                        f"TLS 8443)"
+                    )
+                raise ConnectorError(msg) from exc
         return self._client
 
     def dispose(self) -> None:

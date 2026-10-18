@@ -10,7 +10,7 @@ from app.connectors.factory import SUPPORTED_SOURCES, build_connector
 from app.core.logging import log
 from app.core.routes import SafeAPIRoute
 from app.schemas import ConnectionSpec, ConnectionStatus
-from app.services.ingest import _SCHEME_MAP, extract_connections
+from app.services.ingest import _SCHEME_MAP, extract_connections_async
 from app.services.requirements import split_ref
 from app.store import repository as repo
 
@@ -50,6 +50,7 @@ def list_sources() -> dict[str, Any]:
         "fields_by_type": {
             "postgres": ["host", "port", "database", "schema_", "username", "password"],
             "mysql": ["host", "port", "database", "username", "password"],
+            "clickhouse": ["host", "port", "database", "username", "password"],
             "snowflake": ["account", "warehouse", "role", "database", "schema_", "username", "password"],
             "bigquery": ["database", "credentials_json"],
             "databricks": ["host", "http_path", "database", "token"],
@@ -58,7 +59,13 @@ def list_sources() -> dict[str, Any]:
             "local_csv": ["path", "file_format"],
             "s3_csv": ["bucket", "key", "region", "file_format", "credentials_json"],
         },
-        "defaults": {"postgres": {"port": 5432}, "mysql": {"port": 3306}, "mssql": {"port": 1433}},
+        "defaults": {
+            "postgres": {"port": 5432},
+            "mysql": {"port": 3306},
+            "mssql": {"port": 1433},
+            # the HTTP interface, not the native TCP 9000 which we cannot speak
+            "clickhouse": {"port": 8123},
+        },
     }
 
 
@@ -164,8 +171,8 @@ def _url_diagnosis(url: str) -> str:
 
 
 @router.post("/from-url", response_model=TestConnectionResponse)
-def connect_from_url(req: FromUrlRequest) -> TestConnectionResponse:
-    specs = extract_connections(req.url)
+async def connect_from_url(req: FromUrlRequest) -> TestConnectionResponse:
+    specs = await extract_connections_async(req.url)
     if not specs:
         raise HTTPException(422, _url_diagnosis(req.url))
     return test_connection(

@@ -6,10 +6,18 @@ This is what lets the user "just paste everything in the chat window".
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from app.schemas import ConnectionSpec, EtlLanguage, SourceType
 
+log = logging.getLogger(__name__)
+
+# NOTE: The `db` group is greedy ([^?\s]*) so it captures the full path
+# component.  Prose that immediately follows the database name (e.g.
+# "property_intelI expect: ...") is cleaned up afterwards in parse_url via
+# _clean_db(), which stops at the first camelCase transition or sentence
+# punctuation that signals natural language rather than a real identifier.
 _URL_RE = re.compile(
     r"(?P<scheme>[a-z0-9+]+)://"
     r"(?:(?P<user>[^:/@\s]+)(?::(?P<pw>[^@\s]+))?@)?"
@@ -18,6 +26,19 @@ _URL_RE = re.compile(
     r"(?:\?(?P<params>\S+))?",
     re.I,
 )
+
+# Strips trailing prose from a database/path segment captured by _URL_RE.
+# Matches the first camelCase transition (lowercase/digit immediately before
+# an uppercase letter), a sentence-boundary punctuation, or whitespace.
+_DB_PROSE_RE = re.compile(r"(?<=[a-z0-9_])(?=[A-Z])|[.!?,;:]+.*$")
+
+
+def _clean_db(raw: str | None) -> str | None:
+    """Trim trailing natural-language prose from a captured database name."""
+    if not raw:
+        return raw or None
+    cleaned = _DB_PROSE_RE.split(raw, maxsplit=1)[0]
+    return cleaned or None
 
 _SCHEME_MAP = {
     "postgresql": SourceType.POSTGRES,
@@ -81,6 +102,73 @@ def guess_type(text: str) -> SourceType | None:
     return None
 
 
+# Whole-word engine mentions. `(?![a-z])` (not \b at the end) is deliberate:
+# `_` is a word character, so \bclickhouse\b would MISS clickhouse_connect —
+# a module name that is exactly the evidence we want — while (?![a-z]) still
+# rejects extensions like "clickhousedb" or "postgresified".
+_ENGINE_WORD_RE = re.compile(
+    r"\b(clickhouse|postgres(?:ql)?|mariadb|mysql|snowflake|bigquery|"
+    r"databricks|mssql|sqlserver|sqlite|duckdb|s3)(?![a-z])",
+    re.I,
+)
+
+
+def engine_word_guess(text: str) -> SourceType | None:
+    """The engine *named* in prose/code — only when exactly one family appears.
+
+    A weak signal (a comment mentioning an engine is not a connection), so its
+    standard is strict: distinct families in the text must be exactly one.
+    Two different engines mentioned, or none, returns None — a wrong prefill
+    typed into the form by a user is worse than an empty field.
+    """
+    if not text:
+        return None
+    families: set[SourceType] = set()
+    for m in _ENGINE_WORD_RE.finditer(text):
+        st = _WORDS.get(m.group(1).lower()) or _SCHEME_MAP.get(m.group(1).lower())
+        if st is not None:
+            families.add(st)
+    return next(iter(families)) if len(families) == 1 else None
+
+
+_GET_CLIENT_RE = re.compile(r"clickhouse_connect\s*\.\s*get_client\s*\(([^)]*)\)", re.I)
+_HOST_RE = re.compile(r"\bhost\s*=\s*(?P<q>['\"])(?P<v>[^'\"]+)(?P=q)")
+_PORT_RE = re.compile(r"\bport\s*=\s*(?P<v>\d{1,5})\b")
+_STR_KW_RE = re.compile(r"\b(?P<k>database|username|user)\s*=\s*(?P<q>['\"])(?P<v>[^'\"]+)(?P=q)")
+
+
+def _client_call_specs(text: str) -> list[ConnectionSpec]:
+    """Connection specs encoded in code as clickhouse_connect.get_client(...) calls.
+
+    Only *literal* values are trusted — an unquoted `host=CH_HOST` is a runtime
+    variable whose value we cannot know and must not guess. Passwords are not
+    captured: specs derived from code carry host/port/db/user, which are
+    safe to echo back; secrets stay in the user's own codebase.
+    """
+    specs: list[ConnectionSpec] = []
+    for m in _GET_CLIENT_RE.finditer(text):
+        body = m.group(1)
+        host = _HOST_RE.search(body)
+        if host is None:  # a host is the minimum for a usable connection
+            continue
+        port = _PORT_RE.search(body)
+        spec = ConnectionSpec(
+            type=SourceType.CLICKHOUSE,
+            name=f"clickhouse-{host.group('v')}",
+            host=host.group("v"),
+            port=int(port.group("v")) if port else None,
+            username=None,
+        )
+        for kw in _STR_KW_RE.finditer(body):
+            key, value = kw.group("k"), kw.group("v")
+            if key in ("database",):
+                spec.database = value
+            else:
+                spec.username = value
+        specs.append(spec)
+    return specs
+
+
 def parse_url(url: str) -> ConnectionSpec | None:
     m = _URL_RE.search(url.strip())
     if not m:
@@ -102,7 +190,7 @@ def parse_url(url: str) -> ConnectionSpec | None:
         name=f"{st}-{m.group('host')}",
         host=m.group("host"),
         port=int(m.group("port")) if m.group("port") else None,
-        database=m.group("db") or None,
+        database=_clean_db(m.group("db")),
         username=m.group("user"),
         password=m.group("pw"),
     )
@@ -162,6 +250,11 @@ def extract_connections(text: str) -> list[ConnectionSpec]:
         if spec is not None:
             found.setdefault(spec.name, spec)
 
+    # client constructor calls: clickhouse_connect.get_client(host=..., ...)
+    for spec in _client_call_specs(text):
+        if spec.name not in found:
+            found[spec.name] = spec
+
     # bare host/port/db/user triples
     hint = guess_type(text)
     if hint is not None and not found:
@@ -202,6 +295,79 @@ def extract_connections(text: str) -> list[ConnectionSpec]:
             )
 
     return list(found.values())
+
+
+# --------------------------------------------------------------------------- #
+# LLM-assisted extraction
+# --------------------------------------------------------------------------- #
+
+_LLM_PROMPT = """\
+Extract every database connection mentioned in the text below and return a
+JSON array (no markdown fences, no prose outside the JSON).  Each element
+must be a valid ConnectionSpec object with at least a "type" field chosen
+from: postgres, mysql, snowflake, bigquery, databricks, mssql, clickhouse,
+sqlite, s3_csv.  Include any of the following fields you can identify:
+  type, name, host, port, database, schema, username, password,
+  account, warehouse, role, http_path, token, bucket, region, key.
+If there are no connections, return an empty array [].
+
+Text:
+{text}
+
+JSON array:"""
+
+
+async def extract_connections_async(text: str) -> list[ConnectionSpec]:
+    """Extract connection specs from *text*, falling back to the LLM if needed.
+
+    Pipeline:
+      1. Try deterministic regex / JSON-block parsing (``extract_connections``).
+      2. If that yields nothing **and** an LLM is configured, ask the model to
+         emit a structured JSON array of ConnectionSpec objects.
+
+    The function is always safe to call: when no LLM is available it just
+    returns the deterministic results (possibly empty).
+    """
+    # 1. Fast deterministic path
+    specs = extract_connections(text)
+    if specs:
+        return specs
+
+    # 2. LLM fallback
+    from app.core.llm import ainvoke, llm_available  # local import to avoid circular deps
+
+    if not llm_available():
+        return []
+
+    try:
+        raw = await ainvoke(_LLM_PROMPT.format(text=text[:4000]))
+    except Exception:  # noqa: BLE001
+        log.warning("LLM connection extraction failed", exc_info=True)
+        return []
+
+    # Strip optional markdown code-fences the model may include anyway
+    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.I)
+
+    try:
+        items = json.loads(raw)
+        if not isinstance(items, list):
+            items = [items]
+    except json.JSONDecodeError:
+        log.warning("LLM returned non-JSON for connection extraction: %s", raw[:200])
+        return []
+
+    results: list[ConnectionSpec] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        # Auto-generate a name when the LLM didn't include one
+        if not item.get("name"):
+            item["name"] = f"{item.get('type', 'conn')}-llm"
+        try:
+            results.append(ConnectionSpec.model_validate(item))
+        except Exception:  # noqa: BLE001
+            log.debug("LLM connection item failed validation: %s", item)
+    return results
 
 
 _SQL_HINT = re.compile(

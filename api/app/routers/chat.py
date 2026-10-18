@@ -47,7 +47,7 @@ from app.schemas import (
     StreamEvent,
     TestPlan,
 )
-from app.services.ingest import extract_connections, looks_like_code
+from app.services.ingest import engine_word_guess, extract_connections_async, looks_like_code
 from app.services.orchestrator import build_bindings, introspect_all, profile_focus, run_audit
 from app.services.source_filter import profile_summary
 from app.store import repository as repo
@@ -162,12 +162,21 @@ def _need_etl_question() -> Question:
     )
 
 
-def _source_question(req: SourceRequirement, index: int, total: int) -> Question:
+def _source_question(
+    req: SourceRequirement, index: int, total: int, raw_code: str = ""
+) -> Question:
     role = "writes to" if req.is_target_side else "reads from"
     tables = ", ".join(f"`{t}`" for t in req.tables[:6])
     more = f" (+{len(req.tables) - 6} more)" if len(req.tables) > 6 else ""
 
-    prefill = {"type": str(req.engine_hint) if req.engine_hint else "postgres"}
+    # the prefill is what the UI echoes as "I expect:" chips — it must only
+    # ever contain evidence, never a fabricated default. A declared engine
+    # (profiles.yml / engine url) is strong; a bare word mention in the code
+    # (engine_word_guess) is weak but real; anything else pre-fills nothing.
+    prefill: dict[str, Any] = {}
+    engine = req.engine_hint or engine_word_guess(raw_code)
+    if engine:
+        prefill["type"] = str(engine)
     for key, value in (
         ("host", req.host_hint),
         ("port", req.port_hint),
@@ -197,7 +206,7 @@ def _source_question(req: SourceRequirement, index: int, total: int) -> Question
                 kind=QuestionKind.CONNECTION,
                 label="Connection URL or details",
                 help="Credentials are stored as secrets and never shown back to you.",
-                placeholder="postgresql://user:password@host:5432/database",
+                placeholder="scheme://user:password@host:port/database",
                 fields=["url"],
                 prefill=prefill,
             )
@@ -339,7 +348,7 @@ async def handle_turn(
 
     # ---- 2. free text: absorb anything recognisable ----------------------- #
     if action != "approve":
-        for spec in extract_connections(text):
+        for spec in await extract_connections_async(text):
             rec = repo.save_connection(spec, session_id)
             ctx["connection_ids"] = [*ctx.get("connection_ids", []), rec.id]
             emit("connection.detected", {"connection_id": rec.id, "spec": spec.redacted()})
@@ -392,7 +401,7 @@ async def handle_turn(
     if outstanding:
         out.stage = str(ConversationStage.NEED_SOURCES)
         total = len(outstanding)
-        out.question = _source_question(outstanding[0], 1, total)
+        out.question = _source_question(outstanding[0], 1, total, raw_code=analysis.raw_code)
         extra = (
             f" I'll need {total} connection{'s' if total > 1 else ''} in total."
             if total > 1

@@ -4,7 +4,8 @@ import asyncio
 
 import pytest
 
-from app.routers.chat import EventBuffer
+from app.routers.chat import EventBuffer, _source_question
+from app.schemas import SourceRequirement, SourceType
 
 
 def test_event_buffer_preserves_emission_order() -> None:
@@ -78,3 +79,40 @@ async def test_pump_terminates_and_flushes_on_cancel() -> None:
     with pytest.raises(asyncio.CancelledError):
         await pump
     assert "before" in sent
+
+
+# --------------------------------------------------------------------------- #
+# _source_question: the "I expect:" prefill must carry evidence, never defaults
+# --------------------------------------------------------------------------- #
+
+_REQ = SourceRequirement(key="db:raw", tables=["raw.orders"])
+
+
+def test_source_question_prefers_declared_engine_hint() -> None:
+    q = _source_question(
+        _REQ.model_copy(update={"engine_hint": SourceType.CLICKHOUSE}),
+        1,
+        1,
+        raw_code="USE postgres; -- misleading comment",
+    )
+    assert q.options[0].prefill["type"] == "clickhouse"
+
+
+def test_source_question_falls_back_to_a_single_engine_word() -> None:
+    q = _source_question(
+        _REQ, 1, 1, raw_code="import clickhouse_connect\nget_client(host='h')"
+    )
+    assert q.options[0].prefill["type"] == "clickhouse"
+
+
+def test_source_question_silence_prefills_no_type_at_all() -> None:
+    """No engine evidence anywhere: nothing fabricated, certainly not postgres."""
+    q = _source_question(_REQ, 1, 1, raw_code="SELECT * FROM raw.orders")
+    assert "type" not in q.options[0].prefill
+
+
+def test_source_question_ambiguous_words_prefill_nothing() -> None:
+    q = _source_question(
+        _REQ, 1, 1, raw_code="moved data postgres -> clickhouse last week"
+    )
+    assert "type" not in q.options[0].prefill

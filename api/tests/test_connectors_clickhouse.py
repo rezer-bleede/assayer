@@ -111,6 +111,35 @@ def test_secure_flag_from_options_and_port(fake_driver) -> None:
     assert calls["secure"] is True
 
 
+def test_native_port_failure_names_the_http_interface(fake_driver, monkeypatch) -> None:
+    """A refused connection on the native TCP port must explain *why* it can't
+    ever work with this driver — not just surface a socket error."""
+    def refusing_get_client(**kwargs: Any) -> _FakeClient:
+        raise ConnectionError(
+            "HTTPConnection(host='localhost', port=9002): Connection refused"
+        )
+
+    mod = types.ModuleType("clickhouse_connect")
+    mod.get_client = refusing_get_client  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "clickhouse_connect", mod)
+
+    conn = ClickHouseConnector(_spec(port=9002))
+    with pytest.raises(ConnectorError) as exc:
+        conn.query("SELECT 1")
+    assert "9002" in str(exc.value)
+    assert "HTTP" in str(exc.value)
+    assert "8123" in str(exc.value)
+
+    # the same failure on the HTTP port does not get the (wrong) hint
+    mod_http = types.ModuleType("clickhouse_connect")
+    mod_http.get_client = refusing_get_client  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "clickhouse_connect", mod_http)
+    conn = ClickHouseConnector(_spec(port=9100))
+    with pytest.raises(ConnectorError) as exc:
+        conn.query("SELECT 1")
+    assert "8123" not in str(exc.value)
+
+
 # --- introspection shape ----------------------------------------------------- #
 
 
