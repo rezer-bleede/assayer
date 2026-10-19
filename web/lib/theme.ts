@@ -66,9 +66,9 @@ export function writeChoice(choice: ThemeChoice): void {
  */
 export const themeScript = `(function(){try{var s=localStorage.getItem(${JSON.stringify(
   STORAGE_KEY,
-)});var t=s==='light'||s==='dark'?s:(window.matchMedia&&window.matchMedia(${JSON.stringify(
+)});var v=s==='light'||s==='dark'?s:'system';var t=v==='system'?(window.matchMedia&&window.matchMedia(${JSON.stringify(
   DARK_QUERY,
-)}).matches?'dark':'light');var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t);r.dataset.theme=s||'system';var c=t==='dark'?'#0a0a0b':'#fafafa';var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++){m[i].setAttribute('content',c);}}catch(e){}})();`;
+)}).matches?'dark':'light'):v;var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t);r.dataset.theme=v;var c=t==='dark'?'#0a0a0b':'#fafafa';var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++){m[i].setAttribute('content',c);}}catch(e){}})();`;
 
 /** The theme the user picked, plus the one actually in effect. */
 export function useTheme(): {
@@ -103,8 +103,11 @@ export function useTheme(): {
   }, []);
 
   const toggle = useCallback(() => {
-    setChoice(resolvedTheme(readChoice()) === 'dark' ? 'light' : 'dark');
-  }, [setChoice]);
+    // flip from what is actually on screen, not from storage: if storage is
+    // blocked the choice is not persisted, and reading it back would leave
+    // the switch stuck.
+    setChoice(theme === 'dark' ? 'light' : 'dark');
+  }, [setChoice, theme]);
 
   return { choice, theme, setChoice, toggle };
 }

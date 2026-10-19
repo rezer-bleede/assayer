@@ -44,7 +44,7 @@ SELECT * FROM (VALUES
   (4, 3, 102, NULL,  'paid',   now() - interval '27 hours'), -- NULL amount
   (4, 3, 102, 99.99, 'paid',   now() - interval '26 hours'), -- duplicate order_id
   (5, 99, 103, 5.00,  'paid',   now() - interval '25 hours'), -- orphan customer_id
-  (6, 2, 104, -20.00, 'paid',   now() - interval '24 hours'), -- negative amount
+  (6, 2, 104, -20.00, 'paid',   now() - interval '26 hours'), -- negative amount
   (7, 3, 105, 75.00, 'pending',now() - interval '48 hours')  -- filtered out below
 ) AS v(order_id, customer_id, product_id, amount, status, created_at)
 WHERE NOT EXISTS (SELECT 1 FROM raw.orders);

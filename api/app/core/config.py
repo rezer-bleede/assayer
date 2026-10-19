@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None
     llm_model: str = "qwen2.5-coder:3b"
     llm_temperature: float = 0.1
+    # Seconds for one model call before it is abandoned. A slow local model on
+    # a CPU-only host must not stall the agent for minutes: the deterministic
+    # planner picks up as soon as this elapses.
+    llm_timeout_seconds: int = 90
+    # Retries after the first attempt. Zero by default — with a good fallback,
+    # retrying a slow or unreachable endpoint only delays the inevitable.
+    llm_max_retries: int = 0
 
     # --- run limits ---
     run_max_checks: int = 200

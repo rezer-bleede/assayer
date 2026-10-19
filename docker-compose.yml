@@ -139,7 +139,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qualitest}:${POSTGRES_PASSWORD:-qualitest}@db:5432/${POSTGRES_DB:-qualitest}
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_BASE_URL: ${LLLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
     volumes:

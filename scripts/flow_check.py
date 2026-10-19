@@ -19,17 +19,27 @@ CONN = "postgresql://qualitest:qualitest@db:5432/qualitest"
 TABLES = ["raw_customers", "raw_orders", "raw_payments", "customers", "orders"]
 
 
-def rest(path, body=None):
+async def rest(path, body=None):
+    """Blocking urllib call, off the event loop.
+
+    A slow endpoint (the agent calls the LLM on /from-repo and /from-url) must
+    not freeze the WebSocket reader: uvicorn sends keepalive pings, and a
+    blocked loop never answers them, so the server drops the connection.
+    """
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
         API + path, data=data, method="POST" if data else "GET",
         headers={"content-type": "application/json"} if data else {},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=240) as r:
-            return json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        return {"__http__": e.code, "detail": e.read().decode()[:200]}
+
+    def call():
+        try:
+            with urllib.request.urlopen(req, timeout=240) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return {"__http__": e.code, "detail": e.read().decode()[:200]}
+
+    return await asyncio.to_thread(call)
 
 
 async def drain(ws, until=("done", "error"), timeout=300):
@@ -63,7 +73,7 @@ async def main():
         print("[boot]", types)
 
         # ---------- opening question asks for the codebase, repo first ----------
-        ctx = rest(f"/api/sessions/{SID}/context")
+        ctx = await rest(f"/api/sessions/{SID}/context")
         question = ctx["pending_question"]
         assert question, "a pending question should be recorded on the session"
         kinds = [o["kind"] for o in question["options"]]
@@ -72,7 +82,7 @@ async def main():
         assert [o["preferred"] for o in question["options"]] == [True, True, False]
 
         # ---------- supply a repo via REST, notify the agent ----------
-        res = rest("/api/etl/from-repo", {"url": JAX, "session_id": SID})
+        res = await rest("/api/etl/from-repo", {"url": JAX, "session_id": SID})
         assert "analysis" in res, res
         eid = res["analysis"]["id"]
         reqs = res["required_sources"]
@@ -92,16 +102,16 @@ async def main():
         print("[Q2]", q2["title"], "| key:", key, "| prefill:", prefill)
 
         # ---------- answering with a db that lacks the tables must not pass ----------
-        bad = rest("/api/connections/from-url",
-                   {"url": CONN, "session_id": SID, "requirement_key": key,
-                    "tables": ["table_that_does_not_exist"]})
+        bad = await rest("/api/connections/from-url",
+                         {"url": CONN, "session_id": SID, "requirement_key": key,
+                          "tables": ["table_that_does_not_exist"]})
         print("[wrong tables] ok:", bad["status"]["ok"], "|", (bad["status"]["message"] or "")[:80])
         assert bad["status"]["ok"] is False
 
         # ---------- correct answer ----------
-        good = rest("/api/connections/from-url",
-                    {"url": CONN, "session_id": SID, "requirement_key": key,
-                     "tables": reqs[0]["tables"]})
+        good = await rest("/api/connections/from-url",
+                          {"url": CONN, "session_id": SID, "requirement_key": key,
+                           "tables": reqs[0]["tables"]})
         print("[connect] ok:", good["status"]["ok"], "| matched:", good["matched_tables"],
               "| unmatched:", good["unmatched_tables"])
         assert good["status"]["ok"] and good["connection_id"], good["status"]
@@ -133,7 +143,7 @@ async def main():
                 print("   {:6} {:36} {}".format(r["status"], r["name"][:36], (r["message"] or "")[:64]))
 
         # ---------- secrets must not be in the transcript ----------
-        hist = rest(f"/api/sessions/{SID}/messages")
+        hist = await rest(f"/api/sessions/{SID}/messages")
         blob = json.dumps(hist)
         leaked = [frag for frag in ("qualitest:qualitest@", "qualitest:qualitest@db") if frag in blob]
         assert not leaked, f"CREDENTIAL LEAK: {leaked}"

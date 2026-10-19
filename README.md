@@ -67,7 +67,7 @@ or the provider.
 | API docs | http://localhost:8010/docs |
 | Health | http://localhost:8010/healthz |
 
-> Ports are non-default (5433 / 6380 / 8010 / 3010) so the stack can coexist with other projects. Change them in `.env`.
+> Ports are non-default (55432 / 56379 / 8010 / 3010) so the stack can coexist with other projects. Change them in `.env`.
 
 > Light or dark: the header has a switch. The app follows your OS until you
 > pick one, then remembers your choice.
@@ -98,7 +98,10 @@ LLM_MODEL=gpt-4o-mini
 The LLM is an **enhancement, not a dependency**. Without one — or with the
 model still downloading — the deterministic planner and rule-based reporter
 still produce a full test plan and a full audit result; only the free-text
-narration degrades.
+narration degrades. A model call is given `LLM_TIMEOUT_SECONDS` (90 by
+default) before the fallback takes over, so a slow local model can never
+stall the agent for minutes; the plan it then produces is the same one the
+deterministic planner would build (verified: 29 checks, same defects).
 
 ---
 
@@ -244,7 +247,9 @@ postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest
 ```
 
 Paste `examples/demo_daily_revenue.sql`, approve the plan. A verified run
-produces **29 checks**, a score of **85.31/100**, and finds every seeded defect:
+produces **29 checks**, a score of **85.31/100**, and finds every seeded defect
+(the same plan comes out whether the local model answers or the deterministic
+planner takes over):
 
 | Severity | Check | Result |
 | --- | --- | --- |
@@ -293,6 +298,8 @@ See `.env.example`. Key knobs:
 | `OLLAMA_MODEL` | qwen2.5-coder:3b | the model the stack pulls into the local runner |
 | `RUN_MAX_CHECKS` | 200 | cap on checks per run |
 | `RUN_MAX_ROW_SAMPLE` | 20 | sample rows captured per failure |
+| `LLM_TIMEOUT_SECONDS` | 90 | seconds per model call before the deterministic planner takes over |
+| `LLM_MAX_RETRIES` | 0 | retries after the first attempt (raise for a flaky hosted endpoint) |
 | `CORS_ORIGINS` | `*` | restrict in production |
 | `RUN_MAX_CONCURRENCY` | 4 | concurrent checks per run |
 | `INTAKE_CODE_MAX_BYTES` | 131072 | per-file cap for code/config that gets parsed |

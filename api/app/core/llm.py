@@ -27,8 +27,8 @@ def build_llm(temperature: float | None = None, model: str | None = None) -> Any
         "temperature": settings.llm_temperature if temperature is None else temperature,
         "api_key": settings.llm_api_key or "ollama",
         "base_url": settings.llm_base_url,
-        "max_retries": 2,
-        "timeout": 120,
+        "max_retries": settings.llm_max_retries,
+        "timeout": settings.llm_timeout_seconds,
     }
     if settings.llm_provider.lower() == "ollama":
         kwargs["model"] = model or settings.llm_model

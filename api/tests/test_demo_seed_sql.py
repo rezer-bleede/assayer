@@ -72,8 +72,14 @@ def test_dirty_dataset_carries_its_defects() -> None:
     # a bad email and a NULL name
     assert "not-an-email" in text, "the invalid email is gone"
     assert re.search(r"\(\s*4,\s*NULL,", text), "the NULL customer name is gone"
-    # freshness: the newest order must be older than a 24h SLA
-    assert "interval '24 hours'" in text, "the stale-data window is gone"
+    # freshness: every seeded timestamp must be older than the planner's 24h
+    # SLA. A single fresh row would make the freshness check pass and quietly
+    # break the demo.
+    hours = [int(h) for h in re.findall(r"interval '(\d+) hours'", text)]
+    assert hours, "the timestamps are not relative to the seed time"
+    assert min(hours) > 24, (
+        "a seeded row is fresh enough to pass the 24h freshness check"
+    )
 
 
 def test_jaffle_dataset_carries_its_defects() -> None:

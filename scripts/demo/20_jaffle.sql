@@ -1,4 +1,4 @@
--- JaFFLe-flavored demo dataset: required by scripts/flow_check.py and by the
+-- jaffle-flavored demo dataset: required by scripts/flow_check.py and by the
 -- README screenshots. Applied once on a brand-new database, never touched
 -- again. Idempotent by design: CREATE-IF-NOT-EXISTS plus ON CONFLICT DO
 -- NOTHING inserts, so re-running is a no-op.
