@@ -1,6 +1,8 @@
 """Simulate the browser: REST for credentials, WebSocket for the agent's questions.
 
-Run inside the api container. Seed the target tables first (see README).
+Run inside the api container. The demo tables this needs are applied by the
+stack itself on first boot (`scripts/demo/*.sql`, via the `demo-seed` compose
+service) — there is nothing to seed by hand.
 """
 import asyncio
 import json

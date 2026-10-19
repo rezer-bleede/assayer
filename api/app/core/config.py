@@ -25,11 +25,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://qualitest:qualitest@db:5432/qualitest"
     redis_url: str = "redis://redis:6379/0"
 
-    # --- llm (bring your own key / openai-compatible / ollama) ---
-    llm_provider: str = "openai"
-    llm_base_url: str | None = "https://api.openai.com/v1"
+    # --- llm ---
+    # The default is the local model runner that ships with the stack, so a
+    # plain `docker compose up` has a working LLM with nothing to configure.
+    # Point these at any OpenAI-compatible endpoint (OpenAI, Azure, vLLM,
+    # LiteLLM) to use something else; an unreachable endpoint degrades to the
+    # deterministic planner rather than failing.
+    llm_provider: str = "ollama"
+    llm_base_url: str | None = "http://ollama:11434/v1"
     llm_api_key: str | None = None
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "qwen2.5-coder:3b"
     llm_temperature: float = 0.1
 
     # --- run limits ---

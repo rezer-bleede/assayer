@@ -83,9 +83,9 @@ docker compose up -d --build
 # API docs http://localhost:8010/docs
 ```
 
-```bash
-./scripts/seed_demo.sh
-```
+The demo dataset is applied by the stack itself on first boot
+(`scripts/demo/*.sql`, via the `demo-seed` service) — there is nothing to seed
+by hand.
 
 Then paste `postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest`
 and `examples/demo_daily_revenue.sql` into the chat. Verified baseline:

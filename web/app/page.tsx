@@ -9,6 +9,7 @@ import { ResultsCard } from '@/components/ResultsCard';
 import { api, connectFromUrlStream, repairPatch, type RunResult } from '@/lib/api';
 import type { FileSelection } from '@/lib/upload';
 import { useAgentChat } from '@/lib/useAgentChat';
+import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 const STAGES: { key: string; label: string }[] = [
@@ -358,11 +359,48 @@ function Header({
           className={cn('h-2 w-2 rounded-full', connected ? 'bg-pass' : 'bg-muted/40')}
           title={connected ? 'connected' : 'connecting'}
         />
+        <ThemeToggle />
         <button onClick={onReset} className="btn-ghost px-2 py-1 text-[11px]">
           New session
         </button>
       </div>
     </header>
+  );
+}
+
+/** Light/dark switch. The icon shows what clicking will switch *to*. */
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const next = theme === 'dark' ? 'light' : 'dark';
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="btn-ghost h-7 w-7 p-0"
+      title={`Switch to ${next} mode`}
+      aria-label={`Switch to ${next} mode`}
+    >
+      {theme === 'dark' ? (
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="3.1" stroke="currentColor" strokeWidth="1.5" />
+          <path
+            d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1M12.9 12.9l-1.1-1.1M4.2 4.2 3.1 3.1"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5 5.9 5.9 0 1 0 13.5 9.6Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </button>
   );
 }
 

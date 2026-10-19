@@ -30,28 +30,87 @@ services:
     ports:
       - "${REDIS_PORT:-56379}:6379"
 
-  # Optional local model runner. Enable with:  docker compose --profile ollama up -d
+  # The demo dataset (a deliberately dirty warehouse) is applied automatically
+  # on first boot, so nothing has to be seeded by hand. Idempotent: it only
+  # creates what is missing and never touches existing rows.
+  demo-seed:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGUSER: ${POSTGRES_USER:-qualitest}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-qualitest}
+      PGDATABASE: ${POSTGRES_DB:-qualitest}
+    volumes:
+      - ./scripts/demo:/demo:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for f in /demo/*.sql; do
+          echo "seeding $$f"
+          psql -h db -v ON_ERROR_STOP=1 -f "$$f" || exit 1
+        done
+        echo "demo data ready"
+    restart: "no"
+
+  # Local model runner. On by default — the app's LLM settings point here, so
+  # a plain `docker compose up` gets a working local model with no setup.
   ollama:
     image: ollama/ollama:latest
-    profiles: ["ollama"]
     volumes:
       - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     ports:
       - "${OLLAMA_PORT:-11435}:11434"
+
+  # Pulls the model once, then exits. The API does not wait for it: until the
+  # model is there the agent falls back to its deterministic planner.
+  ollama-model:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-${LLM_MODEL:-qwen2.5-coder:3b}}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ "$${LLM_PROVIDER}" = "ollama" ]; then
+          ollama pull $${OLLAMA_MODEL:-$${LLM_MODEL}}
+        else
+          echo "LLM_PROVIDER=$${LLM_PROVIDER}: no local model needed"
+        fi
+    restart: "no"
 
   api:
     build:
       context: ./api
       dockerfile: Dockerfile
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    env_file: [.env]
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qualitest}:${POSTGRES_PASSWORD:-qualitest}@db:5432/${POSTGRES_DB:-qualitest}
       REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
     volumes:
       - ./api:/app
       # sample ETL the agent (and the test suite) can read
       - ./examples:/app/examples:ro
+      # the demo dataset the stack seeds, so the test suite can guard it
+      - ./scripts/demo:/app/demo:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -73,10 +132,16 @@ services:
       context: ./api
       dockerfile: Dockerfile
     command: ["python", "-m", "app.worker"]
-    env_file: [.env]
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qualitest}:${POSTGRES_PASSWORD:-qualitest}@db:5432/${POSTGRES_DB:-qualitest}
       REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
     volumes:
       - ./api:/app
     extra_hosts:

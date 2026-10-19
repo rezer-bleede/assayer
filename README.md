@@ -52,13 +52,14 @@ Provide your data connection details and ETL code/script — the agent figures o
 git clone <your-repo-url>
 cd data-qualitest-agent
 
-# 2. Copy env and configure
-cp .env.example .env
-# Add your LLM key (optional — the app works without one)
-
-# 3. Start the stack
+# 2. Start the stack — that is the whole setup
 docker compose up -d --build
 ```
+
+No `.env`, no keys, no seeding: the stack starts a local model, pulls it, and
+applies a demo dataset, so there is something to look at straight away.
+`.env` is optional — copy `.env.example` to `.env` to change ports, the model,
+or the provider.
 
 | Service | URL |
 |---|---|
@@ -68,23 +69,36 @@ docker compose up -d --build
 
 > Ports are non-default (5433 / 6380 / 8010 / 3010) so the stack can coexist with other projects. Change them in `.env`.
 
-### With a local model instead of a hosted key
+> Light or dark: the header has a switch. The app follows your OS until you
+> pick one, then remembers your choice.
 
-```bash
-docker compose --profile ollama up -d
-docker compose exec ollama ollama pull qwen2.5-coder:14b
-```
+### The model
 
-Then in `.env`:
+A local model runner ships with the stack: the first boot pulls
+`qwen2.5-coder:3b` (~1.9 GB) into the `ollama` volume, after which the agent
+uses it out of the box. Until the pull finishes, the agent falls back to its
+deterministic planner, so the app is usable immediately.
+
+To use a bigger model, or a hosted one:
 
 ```dotenv
-LLM_PROVIDER=ollama
-LLM_BASE_URL=http://ollama:11434/v1
-LLM_API_KEY=ollama
+# in .env
 LLM_MODEL=qwen2.5-coder:14b
+OLLAMA_MODEL=qwen2.5-coder:14b   # keep the two in sync
 ```
 
-The LLM is an **enhancement, not a dependency**. Without one, the deterministic planner and rule-based reporter still produce a full test plan and a full audit result — only the free-text narration degrades.
+```dotenv
+# or a hosted provider
+LLM_PROVIDER=openai
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=sk-...
+LLM_MODEL=gpt-4o-mini
+```
+
+The LLM is an **enhancement, not a dependency**. Without one — or with the
+model still downloading — the deterministic planner and rule-based reporter
+still produce a full test plan and a full audit result; only the free-text
+narration degrades.
 
 ---
 
@@ -164,7 +178,7 @@ api/                     FastAPI + LangGraph backend
 web/                     Next.js 14 chat UI (standalone build)
 docs/                    ARCHITECTURE.md · TEST_STRATEGY.md
 examples/                demo SQL / Python / dbt manifest
-scripts/                 seed_demo.sh, docker-healthcheck.sh
+scripts/                 seed_demo.sh (optional reset) · demo/*.sql (the seeded data)
 ```
 
 ---
@@ -222,11 +236,8 @@ curl localhost:8010/api/runs/<run_id>/export
 
 ## Try it in 60 seconds
 
-```bash
-./scripts/seed_demo.sh          # seeds a deliberately dirty dataset
-```
-
-Then in the chat at http://localhost:3010:
+The stack seeds a deliberately dirty dataset by itself on first boot, so there
+is nothing to run. Open the chat at http://localhost:3010 and paste:
 
 ```
 postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest
@@ -240,10 +251,13 @@ produces **29 checks**, a score of **85.31/100**, and finds every seeded defect:
 | critical | `analytics.daily_revenue.customer_id` → `raw.customers` | 1 orphan row |
 | critical | `raw.orders.order_id` uniqueness | 1 duplicate |
 | warning | `raw.customers.email` pattern | 1 invalid |
-| critical | `*.created_at` freshness | ~28h old vs 24h SLA |
+| critical | `*.created_at` freshness | older than the 24h SLA |
 | info | `*.amount >= 0` | 1 negative value |
 
 0 errors — a failing check is reported, never fatal.
+
+> Want the pristine dataset back after poking at it? `./scripts/seed_demo.sh`
+> resets the demo tables. You never have to run it to get started.
 
 ## Common commands
 
@@ -275,7 +289,8 @@ See `.env.example`. Key knobs:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | openai / — / — / gpt-4o-mini | any OpenAI-compatible endpoint |
+| `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | ollama / http://ollama:11434/v1 / ollama / qwen2.5-coder:3b | any OpenAI-compatible endpoint |
+| `OLLAMA_MODEL` | qwen2.5-coder:3b | the model the stack pulls into the local runner |
 | `RUN_MAX_CHECKS` | 200 | cap on checks per run |
 | `RUN_MAX_ROW_SAMPLE` | 20 | sample rows captured per failure |
 | `CORS_ORIGINS` | `*` | restrict in production |

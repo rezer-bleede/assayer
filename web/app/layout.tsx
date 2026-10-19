@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { themeScript } from '@/lib/theme';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -69,7 +70,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0b',
+  // corrected before paint by the theme script, so an explicit choice is
+  // honoured rather than the OS preference
+  themeColor: '#fafafa',
   width: 'device-width',
   initialScale: 1,
 };
@@ -78,6 +81,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/*
+          The theme has to be on <html> before the first paint, or the app
+          flashes the wrong palette. This runs synchronously, ahead of the
+          app's JavaScript — which is why it cannot be a React effect.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
         <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png" />

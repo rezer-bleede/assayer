@@ -12,10 +12,18 @@
   --pass: 22 163 74;
   --fail: 220 38 38;
   --warn: 217 119 6;
+  color-scheme: light;
 }
 
+/*
+ * Two ways to ask for dark, and they must not fight:
+ *  - `.dark` on <html> is the user's explicit choice (set before paint by the
+ *    inline script in layout.tsx, so there is no flash);
+ *  - the media query is the fallback for anyone who never chose — and it is
+ *    skipped once either class is set, so an explicit "light" always wins.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light):not(.dark) {
     --bg: 10 10 11;
     --fg: 244 244 245;
     --muted: 161 161 170;
@@ -25,7 +33,21 @@
     --pass: 74 222 128;
     --fail: 248 113 113;
     --warn: 251 191 36;
+    color-scheme: dark;
   }
+}
+
+:root.dark {
+  --bg: 10 10 11;
+  --fg: 244 244 245;
+  --muted: 161 161 170;
+  --border: 39 39 42;
+  --surface: 24 24 27;
+  --accent: 129 140 248;
+  --pass: 74 222 128;
+  --fail: 248 113 113;
+  --warn: 251 191 36;
+  color-scheme: dark;
 }
 
 * {
