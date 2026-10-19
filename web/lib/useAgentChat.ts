@@ -9,6 +9,7 @@ import type {
   EtlAnalysis,
   PlanCheck,
   Question,
+  RepairReport,
   RunResult,
   SourceRequirement,
 } from './api';
@@ -21,6 +22,8 @@ export type AgentEvent =
   | { type: 'stage'; stage: string }
   | { type: 'agent.question'; question?: Question } & Record<string, unknown>
   | { type: 'connection.detected'; connection_id: string; requirement_key?: string | null }
+  | ({ type: 'connection.repair.suggested' } & RepairReport)
+  | ({ type: 'connection.repair.exhausted' } & RepairReport)
   | {
       type: 'etl.analyzed';
       etl_id: string;
@@ -62,6 +65,9 @@ export function useAgentChat() {
   const [etlId, setEtlId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<EtlAnalysis | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
+  const [connectionSuggestion, setConnectionSuggestion] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [stage, setStage] = useState<string>('need_etl');
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -125,8 +131,15 @@ export function useAgentChat() {
         }
         case 'connection.detected':
           setConnections((c) => [...new Set([...c, ev.connection_id])]);
+          setConnectionSuggestion(null);
           // answering a source question resolves it; the agent asks for the next
           if (ev.requirement_key) setQuestion((q) => (q?.requirement_key === ev.requirement_key ? null : q));
+          break;
+        case 'connection.repair.suggested':
+          setConnectionSuggestion(ev.suggested ?? null);
+          break;
+        case 'connection.repair.exhausted':
+          setConnectionSuggestion(null);
           break;
         case 'etl.analyzed':
           setEtlId(ev.etl_id);
@@ -241,6 +254,7 @@ export function useAgentChat() {
     etlId,
     analysis,
     question,
+    connectionSuggestion,
     stage,
     error,
     send,

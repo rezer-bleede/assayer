@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     run_max_row_sample: int = 20
     run_max_concurrency: int = 4
 
+    # --- connection repair: auto-retry a failed connection with better guesses ---
+    # The deterministic ladder is free; the LLM rounds cost tokens and seconds,
+    # so both the attempt count and the wall clock are bounded. "As many tries
+    # as needed" is honoured *within* these limits, and the cap is disclosed.
+    connection_repair_enabled: bool = True
+    connection_repair_max_attempts: int = 6
+    connection_repair_max_llm_rounds: int = 3
+    connection_repair_timeout_seconds: float = 45.0
+
     # --- git intake: cloning is network-bound and unbounded by default ---
     repo_enabled: bool = True
     repo_max_files: int = 400

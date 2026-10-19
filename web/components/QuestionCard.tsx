@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Question, QuestionOption } from '@/lib/api';
+import {
+  describeAttempt,
+  type Question,
+  type QuestionOption,
+  type RepairAttempt,
+  type RepairPatch,
+} from '@/lib/api';
 import {
   describeSelection,
   filterUpload,
@@ -15,7 +21,29 @@ export type QuestionStatus = {
   busy: boolean;
   error?: string | null;
   ok?: string | null;
+  /** live progress: every configuration the agent tried so far */
+  attempts?: RepairAttempt[];
+  /** a working address the agent found; the user confirms it */
+  suggestion?: RepairPatch | null;
 };
+
+/** Rewrite host/port/database in the pasted URL, keeping user & password. */
+function applyPatch(url: string, patch: RepairPatch): string | null {
+  try {
+    const u = new URL(url);
+    if (patch.host) u.hostname = patch.host;
+    if (patch.port) u.port = String(patch.port);
+    if (patch.database) u.pathname = `/${patch.database}`;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function suggestionLabel(patch: RepairPatch): string {
+  const where = [patch.host, patch.port].filter((v) => v !== null && v !== undefined).join(':');
+  return patch.database ? `${where} / ${patch.database}` : where;
+}
 
 /**
  * Renders whatever the agent is currently asking for. The control is chosen by
@@ -221,6 +249,44 @@ export function QuestionCard({
 
         {activeOption?.kind === 'connection' && (
           <ConnectionForm url={url} onUrl={setUrl} prefill={activeOption} busy={status.busy} />
+        )}
+
+        {status.attempts && status.attempts.length > 0 && (
+          <ul className="mt-3 space-y-1" aria-label="Connection attempts" aria-live="polite">
+            {status.attempts.map((a) => (
+              <li key={a.n} className="flex items-start gap-2 text-[12px]">
+                <span
+                  className={cn(
+                    'mt-px font-mono text-[11px]',
+                    a.outcome === 'ok' ? 'text-pass' : 'text-muted/70',
+                  )}
+                >
+                  {a.outcome === 'ok' ? '✓' : '✗'}
+                </span>
+                <span className="font-mono text-muted">{describeAttempt(a)}</span>
+                {a.note && <span className="text-muted/70">— {a.note}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {status.suggestion && activeOption?.kind === 'connection' && (
+          <div className="mt-3 rounded-lg bg-accent/[0.06] px-3 py-2.5">
+            <p className="text-[12.5px] text-fg">
+              This address works: <b className="font-mono">{suggestionLabel(status.suggestion)}</b>
+            </p>
+            <button
+              type="button"
+              className="btn-primary mt-2"
+              disabled={status.busy}
+              onClick={() => {
+                const next = applyPatch(url, status.suggestion as RepairPatch);
+                if (next) setUrl(next);
+              }}
+            >
+              Use it
+            </button>
+          </div>
         )}
 
         {status.error && (

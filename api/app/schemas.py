@@ -133,6 +133,39 @@ class ConnectionRecord(BaseModel):
     status: ConnectionStatus | None = None
 
 
+class RepairAttempt(BaseModel):
+    """One candidate configuration tried while a connection was failing.
+
+    `source` says where the guess came from (`deterministic` covers known
+    environment fixes such as the container boundary or the ClickHouse HTTP
+    port; `llm` covers what the model proposed). `note` is the human-readable
+    reason the candidate was tried or rejected — it is what the UI streams.
+    """
+
+    n: int
+    source: str = "deterministic"
+    host: str | None = None
+    port: int | None = None
+    database: str | None = None
+    outcome: str = "failed"
+    note: str | None = None
+
+
+class RepairReport(BaseModel):
+    """The story of a failed connection: what was tried and what to use instead."""
+
+    attempted: int = 0
+    exhausted: bool = False
+    suggested: dict[str, Any] | None = None
+    attempts: list[RepairAttempt] = Field(default_factory=list)
+    note: str | None = None
+
+    def to_patch(self) -> dict[str, Any]:
+        """The fields a client must change to adopt the suggestion."""
+        s = self.suggested or {}
+        return {k: s[k] for k in ("host", "port", "database") if s.get(k) is not None}
+
+
 # --------------------------------------------------------------------------- #
 # ETL
 # --------------------------------------------------------------------------- #

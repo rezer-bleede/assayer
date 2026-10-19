@@ -104,6 +104,70 @@ Write a concise audit report for a data engineer:
 No preamble, no disclaimers. Plain markdown, max 250 words."""
 
 
+# --------------------------------------------------------------------------- #
+# connection repair
+# --------------------------------------------------------------------------- #
+
+REPAIR_ENVIRONMENT = """Facts about the runtime you must reason with:
+- The agent runs inside a Docker container. A database running on the user's own
+  machine is NOT reachable as `localhost` from here — `host.docker.internal`
+  reaches the Docker Desktop host instead; a sibling container is reachable by
+  its compose service name.
+- ClickHouse speaks HTTP on 8123 (TLS 8443). Ports 9000-9009/9440 are the
+  native TCP protocol, which the HTTP driver cannot use at all.
+- Other engines: postgres 5432, mysql 3306, mssql 1433, snowflake 443.
+- A `Database/role/catalog ... does not exist` error means the *name* is wrong,
+  not the host or port."""
+
+
+def repair_prompt(
+    spec: dict,
+    failures: list[dict],
+    hints: dict,
+    databases: list[str] | None = None,
+) -> str:
+    """Ask for better connection candidates after the deterministic ones failed.
+
+    Only non-secret fields are ever included: host, port, database, engine and
+    the driver error text. Username and password are deliberately absent — the
+    model must fix addressing, not credentials.
+    """
+    tried = "\n".join(
+        f"- host={f.get('host')!r} port={f.get('port')!r} database={f.get('database')!r}"
+        f" -> {f.get('error')}"
+        for f in failures
+    ) or "- (nothing tried yet)"
+    db_line = (
+        f"\nDatabases that exist on that server: {', '.join(databases)}"
+        if databases
+        else ""
+    )
+    return f"""A database connection keeps failing. Propose the most likely fixes.
+
+{REPAIR_ENVIRONMENT}
+
+Connection (secrets omitted):
+  engine: {spec.get('type')}
+  host: {spec.get('host')!r}
+  port: {spec.get('port')!r}
+  database: {spec.get('database')!r}
+  schema: {spec.get('schema')!r}
+
+Evidence from the user's code (may itself be stale): {hints}
+
+Already tried (do not repeat these):
+{tried}{db_line}
+
+Respond with a single JSON object, no prose, no fences:
+
+{{"candidates": [{{"host": "...", "port": 1234, "database": "...", "reason": "why"}}]}}
+
+Rules:
+- 1 to 3 candidates, most likely first. Omit a field to keep the current value.
+- You may change host, port and database only. Never propose a username or password.
+- The engine never changes."""
+
+
 EXPLAIN_CHECK_PROMPT = """A data quality check failed. Explain it to the user in plain \
 language with the concrete numbers, the likely cause, and what to do next.
 

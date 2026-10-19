@@ -6,7 +6,7 @@ import { MessageBubble, TypingIndicator, useAutoScroll } from '@/components/Mess
 import { PlanCard } from '@/components/PlanCard';
 import { QuestionCard, type QuestionStatus } from '@/components/QuestionCard';
 import { ResultsCard } from '@/components/ResultsCard';
-import { api, type RunResult } from '@/lib/api';
+import { api, connectFromUrlStream, repairPatch, type RunResult } from '@/lib/api';
 import type { FileSelection } from '@/lib/upload';
 import { useAgentChat } from '@/lib/useAgentChat';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,14 @@ const STAGES: { key: string; label: string }[] = [
   { key: 'running', label: 'execute' },
   { key: 'done', label: 'report' },
 ];
+
+/** "host:port / database" for a repaired connection the agent is offering. */
+function suggestionText(spec: Record<string, unknown>): string {
+  const where = [spec.host, spec.port]
+    .filter((v) => v !== null && v !== undefined)
+    .join(':');
+  return spec.database ? `${where} / ${String(spec.database)}` : where;
+}
 
 export default function ChatPage() {
   const chat = useAgentChat();
@@ -124,34 +132,48 @@ export default function ChatPage() {
   const handleConnection = useCallback(
     async (url: string) => {
       const { tables, targets } = requirementTables();
-      setQStatus({ busy: true });
-      try {
-        const res = await api.connectFromUrl({
+      const requirementKey = chat.question?.requirement_key ?? null;
+      setQStatus({ busy: true, attempts: [] });
+      await connectFromUrlStream(
+        {
           url,
           session_id: sessionId,
-          requirement_key: chat.question?.requirement_key ?? null,
+          requirement_key: requirementKey,
           tables,
           target_tables: targets,
-        });
-        if (!res.status.ok || !res.connection_id) {
-          setQStatus({
-            busy: false,
-            ok: null,
-            error: res.status.message ?? 'Connection failed.',
-          });
-          return;
-        }
-        const note = res.unmatched_tables.length
-          ? `Connected. Heads up: ${res.unmatched_tables.slice(0, 3).join(', ')} not found there.`
-          : `Connected — all ${res.matched_tables.length} expected table(s) present.`;
-        setQStatus({ busy: false, ok: note, error: null });
-        chat.sendAction('connection_provided', {
-          connection_id: res.connection_id,
-          requirement_key: chat.question?.requirement_key ?? null,
-        });
-      } catch (e) {
-        setQStatus({ busy: false, ok: null, error: (e as Error).message });
-      }
+        },
+        {
+          onAttempt: (a) =>
+            setQStatus((s) => ({ ...s, busy: true, attempts: [...(s.attempts ?? []), a] })),
+          onError: (message) =>
+            setQStatus((s) => ({ ...s, busy: false, ok: null, error: message })),
+          onResult: (res) => {
+            const suggestion = repairPatch(res.repair?.suggested);
+            // a repaired connection is never persisted server-side: it is a
+            // suggestion the user confirms, so the form offers it explicitly
+            if (!res.status.ok || !res.connection_id) {
+              setQStatus((s) => ({
+                ...s,
+                busy: false,
+                ok: suggestion ? 'Found a working address — confirm it below.' : null,
+                error: suggestion
+                  ? null
+                  : (res.repair?.note ?? res.status.message ?? 'Connection failed.'),
+                suggestion,
+              }));
+              return;
+            }
+            const note = res.unmatched_tables.length
+              ? `Connected. Heads up: ${res.unmatched_tables.slice(0, 3).join(', ')} not found there.`
+              : `Connected — all ${res.matched_tables.length} expected table(s) present.`;
+            setQStatus({ busy: false, ok: note, error: null });
+            chat.sendAction('connection_provided', {
+              connection_id: res.connection_id,
+              requirement_key: requirementKey,
+            });
+          },
+        },
+      );
     },
     [requirementTables, sessionId, chat],
   );
@@ -212,8 +234,29 @@ export default function ChatPage() {
             </section>
           )}
 
-          {showPlan && (
-            <section aria-label="Test plan">
+          {chat.connectionSuggestion && (
+            <section
+              aria-label="Repaired connection"
+              className="surface animate-fade-up px-4 py-3"
+            >
+              <p className="text-[13px]">
+                That address didn&rsquo;t work, but I found one that does —{' '}
+                <b className="font-mono">
+                  {suggestionText(chat.connectionSuggestion)}
+                </b>
+                .
+              </p>
+              <button
+                type="button"
+                className="btn-primary mt-2"
+                onClick={() => chat.sendAction('accept_connection', {})}
+              >
+                Use it
+              </button>
+            </section>
+          )}
+
+          {showPlan && (            <section aria-label="Test plan">
               <PlanCard
                 runId={chat.planRunId ?? ''}
                 checks={chat.plan ?? []}

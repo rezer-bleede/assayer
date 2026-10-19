@@ -47,6 +47,12 @@ from app.schemas import (
     StreamEvent,
     TestPlan,
 )
+from app.services.connection_repair import (
+    RepairReport,
+    list_server_databases,
+    probe_attempt,
+    repair_connection,
+)
 from app.services.ingest import engine_word_guess, extract_connections_async, looks_like_code
 from app.services.orchestrator import build_bindings, introspect_all, profile_focus, run_audit
 from app.services.source_filter import profile_summary
@@ -75,6 +81,18 @@ AFFIRMATIVE = {
     "approve",
     "looks good",
     "lgtm",
+}
+
+# words that adopt a *repaired* connection, never confused with plan approval
+ACCEPT_CONNECTION = {
+    "use it",
+    "use that",
+    "use those",
+    "use this",
+    "accept it",
+    "accept",
+    "switch to it",
+    "yes use it",
 }
 
 
@@ -346,13 +364,20 @@ async def handle_turn(
         # honour it, but remember the requirement is unmet so the plan may be thin
         ctx.setdefault("skipped", []).append(payload["requirement_key"])
 
+    # ---- 1b. adopt a connection the agent had to repair ------------------- #
+    adopted = False
+    if _accepts_pending_connection(ctx, action, text):
+        adopted_note = _adopt_pending_connection(ctx, session_id, emit)
+        if adopted_note:
+            notes.append(adopted_note)
+            adopted = True
+
     # ---- 2. free text: absorb anything recognisable ----------------------- #
-    if action != "approve":
+    if action != "approve" and not adopted:
         for spec in await extract_connections_async(text):
-            rec = repo.save_connection(spec, session_id)
-            ctx["connection_ids"] = [*ctx.get("connection_ids", []), rec.id]
-            emit("connection.detected", {"connection_id": rec.id, "spec": spec.redacted()})
-            notes.append(f"Captured a {spec.type} connection to {spec.host or spec.name}.")
+            absorbed = await _absorb_connection(spec, session_id, ctx, emit)
+            if absorbed:
+                notes.append(absorbed)
 
         pasted_id, note = await _absorb_pasted_code(text, session_id, emit)
         if pasted_id:
@@ -422,6 +447,72 @@ async def handle_turn(
 
 def _first_line(notes: list[str]) -> str:
     return notes[-1] if notes else ""
+
+
+def _accepts_pending_connection(ctx: dict, action: str | None, text: str) -> bool:
+    return bool(ctx.get("pending_connection")) and (
+        action == "accept_connection"
+        or (not action and text.strip().lower() in ACCEPT_CONNECTION)
+    )
+
+
+def _adopt_pending_connection(ctx: dict, session_id: str, emit: Any) -> str | None:
+    """Save the repaired connection the user just confirmed."""
+    pending = ctx.pop("pending_connection", None) or {}
+    spec = ConnectionSpec.model_validate(pending.get("spec") or {})
+    rec = repo.save_connection(spec, session_id)
+    ctx["connection_ids"] = [*ctx.get("connection_ids", []), rec.id]
+    if pending.get("requirement_key"):
+        ctx.setdefault("answered", {})[pending["requirement_key"]] = rec.id
+    emit("connection.detected", {"connection_id": rec.id, "spec": spec.redacted()})
+    where = f"{spec.host}:{spec.port}/{spec.database}"
+    return f"Using the repaired connection: {where}."
+
+
+async def _absorb_connection(
+    spec: ConnectionSpec, session_id: str, ctx: dict, emit: Any
+) -> str | None:
+    """Probe a connection the user gave us, repairing its addressing if needed.
+
+    A connection that works as given is saved immediately. One the agent had to
+    *repair* is never saved silently: it is parked as a pending suggestion for
+    the user to confirm, because a guess drawn from a stale ETL hint must not
+    quietly become the connection of record.
+    """
+    tables = list(spec.options.get("tables", []))
+    result = await repair_connection(
+        spec,
+        attempt=lambda cand: probe_attempt(cand, tables),
+        list_databases=list_server_databases,
+        emit=emit,
+    )
+    where = f"{spec.host}:{spec.port}/{spec.database}" if spec.host else spec.name
+
+    if not result.ok:
+        emit("connection.repair.exhausted", result.report().model_dump(mode="json"))
+        return (
+            f"I couldn't reach {where} and tried a few alternatives — tell me the "
+            "right host, port and database and I'll try again."
+        )
+
+    if result.repaired and result.suggested is not None:
+        report: RepairReport = result.report()
+        ctx["pending_connection"] = {
+            "spec": result.suggested.model_dump(mode="json"),
+            "report": report.model_dump(mode="json"),
+        }
+        suggested = result.suggested
+        emit("connection.repair.suggested", report.model_dump(mode="json"))
+        return (
+            f"{where} didn't work, but this addressing does — "
+            f"{suggested.host}:{suggested.port}/{suggested.database}. "
+            "Say \u201cuse it\u201d and I'll switch to it."
+        )
+
+    rec = repo.save_connection(spec, session_id)
+    ctx["connection_ids"] = [*ctx.get("connection_ids", []), rec.id]
+    emit("connection.detected", {"connection_id": rec.id, "spec": spec.redacted()})
+    return f"Captured a {spec.type} connection to {spec.host or spec.name}."
 
 
 def _emit_question(question: Question | None, ctx: dict, session_id: str, emit: Any) -> None:

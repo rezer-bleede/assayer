@@ -14,6 +14,20 @@ from app.services.ingest import (
 )
 
 
+def json_request(accept: str = "application/json"):
+    """A minimal Starlette Request, enough for content negotiation."""
+    from starlette.requests import Request
+
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/connections/from-url",
+            "headers": [(b"accept", accept.encode())],
+        }
+    )
+
+
 def test_parse_postgres_url() -> None:
     spec = parse_url("postgresql://alice:s3cr3t@db.internal:5433/analytics?schema=public")
     assert spec is not None
@@ -106,7 +120,7 @@ async def test_from_url_rejects_unsupported_scheme_with_clear_message() -> None:
     from app.routers.connections import FromUrlRequest, connect_from_url
 
     with pytest.raises(HTTPException) as exc:
-        await connect_from_url(FromUrlRequest(url="mongodb://u:p@host/db"))
+        await connect_from_url(FromUrlRequest(url="mongodb://u:p@host/db"), json_request())
     assert exc.value.status_code == 422
     assert "mongodb" in exc.value.detail
     assert "postgres" in exc.value.detail  # lists what IS supported
@@ -118,7 +132,9 @@ async def test_from_url_rejects_non_url_with_clear_message() -> None:
     from app.routers.connections import FromUrlRequest, connect_from_url
 
     with pytest.raises(HTTPException) as exc:
-        await connect_from_url(FromUrlRequest(url="just some words about my database"))
+        await connect_from_url(
+            FromUrlRequest(url="just some words about my database"), json_request()
+        )
     assert exc.value.status_code == 422
     assert "connection URL" in exc.value.detail
 

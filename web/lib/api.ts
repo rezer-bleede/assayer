@@ -83,6 +83,92 @@ export const api = {
   runs: () => req<{ runs: RunSummary[] }>('/api/runs'),
 };
 
+export type FromUrlBody = {
+  url: string;
+  session_id?: string | null;
+  requirement_key?: string | null;
+  tables?: string[];
+  target_tables?: string[];
+};
+
+export type FromUrlStreamHandlers = {
+  onAttempt?: (attempt: RepairAttempt) => void;
+  onResult: (res: ConnectResponse) => void;
+  onError?: (message: string) => void;
+};
+
+/**
+ * Connect from a pasted URL, watching the repair loop as it runs.
+ *
+ * A failed connection makes the agent try other addresses (the container
+ * boundary, the ClickHouse HTTP port, other databases), which takes seconds —
+ * so this streams each attempt instead of showing a spinner, and finishes with
+ * the same payload the plain REST call returns.
+ */
+export async function connectFromUrlStream(
+  body: FromUrlBody,
+  handlers: FromUrlStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/connections/from-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal,
+    });
+  } catch (e) {
+    handlers.onError?.((e as Error).message);
+    return;
+  }
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => '');
+    handlers.onError?.(parseDetail(text) || `${res.status} ${res.statusText}`);
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let sawResult = false;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let split: number;
+    while ((split = buffer.indexOf('\n\n')) !== -1) {
+      const { event, data } = parseFrame(buffer.slice(0, split));
+      buffer = buffer.slice(split + 2);
+      if (!event) continue;
+      if (event === 'connection.attempt') handlers.onAttempt?.(data as RepairAttempt);
+      else if (event === 'result' && data) {
+        sawResult = true;
+        handlers.onResult(data as ConnectResponse);
+      } else if (event === 'error') {
+        handlers.onError?.(String((data as { message?: string })?.message ?? 'stream error'));
+      }
+    }
+  }
+  if (!sawResult) handlers.onError?.('The connection check ended without a result.');
+}
+
+function parseFrame(frame: string): { event: string | null; data: unknown } {
+  let event: string | null = null;
+  const data: string[] = [];
+  for (const line of frame.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+  }
+  if (!event) return { event: null, data: null };
+  try {
+    return { event, data: JSON.parse(data.join('\n')) };
+  } catch {
+    return { event, data: null };
+  }
+}
+
 /** FastAPI puts the human-readable message inside {"detail": "..."}. */
 function parseDetail(text: string): string | null {
   if (!text) return null;
@@ -100,7 +186,50 @@ export type ConnectResponse = {
   spec: Record<string, unknown>;
   matched_tables: string[];
   unmatched_tables: string[];
+  /** present when the connection as given failed and the agent searched */
+  repair?: RepairReport | null;
 };
+
+/** One configuration the agent tried while a connection was failing. */
+export type RepairAttempt = {
+  n: number;
+  source: string;
+  host: string | null;
+  port: number | null;
+  database: string | null;
+  outcome: string;
+  note: string | null;
+};
+
+export type RepairReport = {
+  attempted: number;
+  exhausted: boolean;
+  suggested: Record<string, unknown> | null;
+  attempts: RepairAttempt[];
+  note: string | null;
+};
+
+/** The addressing fields a suggestion changes; applied onto the URL input. */
+export type RepairPatch = {
+  host?: string | null;
+  port?: number | null;
+  database?: string | null;
+};
+
+export function repairPatch(spec: Record<string, unknown> | null | undefined): RepairPatch | null {
+  if (!spec) return null;
+  const patch: RepairPatch = {
+    host: (spec.host as string) ?? null,
+    port: (spec.port as number) ?? null,
+    database: (spec.database as string) ?? null,
+  };
+  return patch.host || patch.port || patch.database ? patch : null;
+}
+
+export function describeAttempt(a: RepairAttempt): string {
+  const where = [a.host, a.port].filter((v) => v !== null && v !== undefined).join(':');
+  return a.database ? `${where}/${a.database}` : where;
+}
 
 export type AnalyzeResponse = {
   analysis: EtlAnalysis;
