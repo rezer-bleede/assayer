@@ -87,7 +87,8 @@ async def build_report(run: RunResult, analysis: EtlAnalysis | None = None) -> s
         "etl_transformations_likely_responsible": etl_hints,
     }
     try:
-        return await ainvoke(report_prompt(payload, summary["failures"]))
+        # the narrative is a page of prose, not a saga — bound it
+        return await ainvoke(report_prompt(payload, summary["failures"]), max_tokens=800)
     except Exception as exc:  # noqa: BLE001
         log.warning("llm report failed, using fallback", error=str(exc))
         return _fallback_narrary(run)

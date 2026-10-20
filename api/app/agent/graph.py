@@ -193,7 +193,7 @@ async def narrate_failure(run: RunResult, result: Any) -> str:
     )
     if llm_available():
         try:
-            return await ainvoke(prompt)
+            return await ainvoke(prompt, max_tokens=300)
         except Exception as exc:  # noqa: BLE001
             log.warning("llm explain failed", error=str(exc))
     return (

@@ -76,6 +76,37 @@ def test_pattern_without_regex_is_rejected() -> None:
         compile_check(_check(CheckKind.PATTERN, column="email"), _conn())
 
 
+# --- column-required kinds ------------------------------------------------ #
+
+
+def test_column_level_kinds_without_a_column_are_rejected() -> None:
+    """A missing column used to render literal SQL like `WHEN None IS NULL`."""
+    for kind_name in ("null_rate", "unique", "duplicate", "freshness", "min_max", "pattern", "distribution"):
+        with pytest.raises(UnsafeSQLError, match="must name a column"):
+            compile_check(_check(CheckKind(kind_name)), _conn())
+
+
+def test_referential_without_a_column_is_rejected() -> None:
+    c = _check(
+        CheckKind.REFERENTIAL,
+        params={"parent_table": "cust", "parent_column": "id"},
+    )
+    with pytest.raises(UnsafeSQLError, match="must name a column"):
+        compile_check(c, _conn())
+
+
+def test_row_count_without_a_column_still_compiles() -> None:
+    sql, _ = compile_check(_check(CheckKind.ROW_COUNT), _conn())
+    assert "COUNT(*)" in sql
+
+
+def test_freshness_compiles_against_the_named_column() -> None:
+    c = _check(CheckKind.FRESHNESS, column="created_at", threshold=24)
+    sql, _ = compile_check(c, _conn())
+    assert '"created_at"' in sql
+    assert "_ingest_ts" not in sql
+
+
 # --- join key inference --------------------------------------------------- #
 
 _SQL = """

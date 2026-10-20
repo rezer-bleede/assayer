@@ -14,6 +14,16 @@ class UnsafeSQLError(ValueError):
     pass
 
 
+# Checking a column implies naming one: interpolation of a missing column
+# produced literal SQL like `WHEN None IS NULL` — readable nonsense that
+# failed late with a cryptic error. Public so the plan builder can drop
+# such checks before they ever reach a POST /runs call.
+NEEDS_COLUMN = (
+    "null_rate", "unique", "duplicate", "referential", "freshness",
+    "min_max", "range", "pattern", "distribution",
+)
+
+
 _FORBIDDEN = (
     "insert", "update", "delete", "drop", "truncate", "alter", "create",
     "grant", "revoke", "merge", "replace", "attach", "copy", "vacuum",
@@ -52,6 +62,9 @@ def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
     t = conn.quote_table(check.table.schema_, check.table.name)
     col = f'"{check.column}"' if check.column else None
     kind = str(check.kind)
+
+    if col is None and kind in NEEDS_COLUMN:
+        raise UnsafeSQLError(f'a {kind} check must name a column')
 
     match kind:
         case "null_rate":
@@ -94,8 +107,8 @@ def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
 
         case "freshness":
             sql = (
-                f"SELECT COUNT(*) AS total, MAX({col or '_ingest_ts'}) AS latest, "
-                f"MIN({col or '_ingest_ts'}) AS earliest FROM {t}"
+                f"SELECT COUNT(*) AS total, MAX({col}) AS latest, "
+                f"MIN({col}) AS earliest FROM {t}"
             )
             return sql, {}
 

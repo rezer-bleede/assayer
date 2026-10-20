@@ -340,7 +340,7 @@ async def extract_connections_async(text: str) -> list[ConnectionSpec]:
         return []
 
     try:
-        raw = await ainvoke(_LLM_PROMPT.format(text=text[:4000]))
+        raw = await ainvoke(_LLM_PROMPT.format(text=text[:4000]), max_tokens=400)
     except Exception:  # noqa: BLE001
         log.warning("LLM connection extraction failed", exc_info=True)
         return []

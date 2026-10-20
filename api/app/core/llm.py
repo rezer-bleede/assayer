@@ -36,9 +36,17 @@ def build_llm(temperature: float | None = None, model: str | None = None) -> Any
     return ChatOpenAI(**kwargs)
 
 
-async def ainvoke(prompt: Any, **kwargs: Any) -> str:
-    """Invoke the configured chat model and return plain text."""
-    resp = await build_llm().ainvoke(prompt, **kwargs)
+async def ainvoke(prompt: Any, max_tokens: int | None = None, **kwargs: Any) -> str:
+    """Invoke the configured chat model and return plain text.
+
+    `max_tokens` bounds the generation. Always pass it for prose: a small
+    local model can fall into a loop and emit thousands of tokens, which the
+    deadline then aborts — wasted time either way.
+    """
+    model = build_llm()
+    if max_tokens:
+        model = model.bind(max_tokens=max_tokens)
+    resp = await model.ainvoke(prompt, **kwargs)
     content = getattr(resp, "content", resp)
     if isinstance(content, list):  # some providers return content blocks
         content = "\n".join(

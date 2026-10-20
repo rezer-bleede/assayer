@@ -77,7 +77,8 @@ or the provider.
 A local model runner ships with the stack: the first boot pulls
 `qwen2.5-coder:3b` (~1.9 GB) into the `ollama` volume, after which the agent
 uses it out of the box. Until the pull finishes, the agent falls back to its
-deterministic planner, so the app is usable immediately.
+deterministic planner, so the app is usable immediately. (On macOS `make up`
+skips the bundled runner — see the next section.)
 
 To use a bigger model, or a hosted one:
 
@@ -94,6 +95,37 @@ LLM_BASE_URL=https://api.openai.com/v1
 LLM_API_KEY=sk-...
 LLM_MODEL=gpt-4o-mini
 ```
+
+#### Faster on macOS: run the model on the GPU
+
+The bundled runner stays the default everywhere **except macOS**: Docker on
+macOS cannot pass the Apple GPU to containers, so the in-Docker model would
+run CPU-only (~8 tokens/s — slow enough that a full plan can outlive its
+deadline and fall back to the deterministic planner). Installed natively,
+Ollama uses Metal (~40 tokens/s) and a plan takes about a minute. `make up`
+detects macOS and skips the bundled runner automatically; Linux and Windows
+hosts keep the old behavior unchanged:
+
+```sh
+brew install --cask ollama        # or download from https://ollama.com
+ollama pull qwen2.5-coder:3b
+make up                           # skips the bundled runner on macOS
+```
+
+```dotenv
+# in .env
+LLM_BASE_URL=http://host.docker.internal:11434/v1
+LLM_TIMEOUT_SECONDS=180
+```
+
+Env changes apply on `make up` or `docker compose up -d api worker` (a plain
+`restart` does not re-read .env). To force the bundled runner on macOS anyway:
+`make up BUNDLED=1`, which expects `LLM_BASE_URL` to point at it (the default,
+`http://ollama:11434/v1`) rather than at a native install. On any platform,
+running `docker compose up` directly (not through `make`) always starts the
+bundled runner, even on macOS. Note `brew install ollama` (without `--cask`)
+builds from source and can hang on older macOS — use the cask or the prebuilt
+app, and launch it once so its server is listening on `127.0.0.1:11434`.
 
 The LLM is an **enhancement, not a dependency**. Without one — or with the
 model still downloading — the deterministic planner and rule-based reporter

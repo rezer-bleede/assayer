@@ -54,8 +54,12 @@ services:
         echo "demo data ready"
     restart: "no"
 
-  # Local model runner. On by default — the app's LLM settings point here, so
-  # a plain `docker compose up` gets a working local model with no setup.
+  # Local model runner. On by default for Linux and Windows hosts — the app's
+  # LLM settings point here, so a plain `docker compose up` gets a working
+  # local model with no setup. On macOS, Docker cannot pass the Apple GPU to
+  # containers (the model would run CPU-only, ~8 tok/s), so `make up` skips
+  # this service pair in favour of a native, Metal-accelerated Ollama instead
+  # (see the Makefile and README -> "Faster on macOS").
   ollama:
     image: ollama/ollama:latest
     volumes:

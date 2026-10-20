@@ -10,6 +10,10 @@ from app.agent.planner import SourceBinding, plan_checks, summarize_analysis
 from app.agent.prompts import plan_prompt
 from app.core.llm import ainvoke, llm_available
 from app.core.logging import log
+
+# Single enforcement point with the runner: the same tuple guards compile_check,
+# so a column-less check cannot be produced where it would break, either.
+from app.runner.compiler import NEEDS_COLUMN
 from app.schemas import (
     CheckKind,
     CheckSpec,
@@ -23,6 +27,12 @@ _ALLOWED_KINDS = {k.value for k in CheckKind}
 _ALLOWED_SEVERITIES = {s.value for s in Severity}
 
 
+def _known_columns(binding: SourceBinding) -> set[str] | None:
+    """Lower-cased column names the profiler saw, or None when unprofiled."""
+    lowered = {str(c).lower() for c in (binding.columns or []) if c}
+    return lowered or None
+
+
 def _coerce(raw: dict, bindings: list[SourceBinding]) -> CheckSpec | None:
     """Turn one LLM check dict into a validated CheckSpec, or drop it."""
     try:
@@ -32,6 +42,14 @@ def _coerce(raw: dict, bindings: list[SourceBinding]) -> CheckSpec | None:
         severity = str(raw.get("severity", "critical")).lower()
         if severity not in _ALLOWED_SEVERITIES:
             severity = "critical"
+
+        # Column-level kinds must name a column: a missing one turns into
+        # literal `None` in the compiled SQL and fails late. Table-level
+        # aggregates (row_count/volume) are the only checks that may stay
+        # nameless.
+        if kind in NEEDS_COLUMN and not str(raw.get("column") or "").strip():
+            log.debug("dropping llm check: kind needs a column", kind=kind)
+            return None
 
         table_name = str(raw.get("table") or "").strip()
         source_id = str(raw.get("source_id") or "").strip()
@@ -44,9 +62,33 @@ def _coerce(raw: dict, bindings: list[SourceBinding]) -> CheckSpec | None:
         if binding is None:
             return None
 
+        # A check that names a column the profiler never saw cannot run — the
+        # current database throws UndefinedColumn and the check reports as an
+        # error. Small models invent plausible column names; drop those here.
+        column = raw.get("column")
+        known = _known_columns(binding)
+        if column and known and str(column).lower() not in known:
+            log.debug("dropping llm check: unknown column", table=binding.table, column=column)
+            return None
+
         params = raw.get("params") or {}
         if not isinstance(params, dict):
             params = {}
+
+        # The parent side of a referential check is validated the same way:
+        # against the other bindings' live names, not against the model's
+        # imagination of the warehouse.
+        if kind == "referential":
+            parent = str(params.get("parent_table") or "").strip().split(".")[-1].lower()
+            parent_binding = next((b for b in bindings if b.table.lower() == parent), None)
+            if parent_binding is None:
+                log.debug("dropping llm check: unknown parent_table", parent=parent)
+                return None
+            parent_col = str(params.get("parent_column") or "").strip()
+            parent_known = _known_columns(parent_binding)
+            if parent_col and parent_known and parent_col.lower() not in parent_known:
+                log.debug("dropping llm check: unknown parent_column", parent=parent, column=parent_col)
+                return None
 
         return CheckSpec(
             name=str(raw.get("name") or f"{binding.table} {kind}")[:160],
@@ -137,7 +179,8 @@ async def build_plan(
             plan_prompt(summarize_analysis(analysis), src_block, user_intent)
         )
         parsed = _extract_json(raw)
-        llm_checks = [c for c in (_coerce(r, bindings) for r in parsed.get("checks", [])) if c]
+        proposed = parsed.get("checks", []) if isinstance(parsed.get("checks", []), list) else []
+        llm_checks = [c for c in (_coerce(r, bindings) for r in proposed) if c]
     except Exception as exc:  # noqa: BLE001 - LLM is an enhancement, never a hard dep
         log.warning("llm planning failed, using deterministic plan", error=str(exc))
         return TestPlan(
@@ -147,7 +190,13 @@ async def build_plan(
 
     merged = _merge(base, llm_checks)
     summary = str(parsed.get("summary") or "").strip() or f"{len(merged)} checks"
-    log.info("plan built", deterministic=len(base), llm=len(llm_checks), merged=len(merged))
+    log.info(
+        "plan built",
+        deterministic=len(base),
+        suggested=len(proposed),
+        accepted=len(llm_checks),
+        merged=len(merged),
+    )
     return TestPlan(summary=f"{summary} ({len(base)} baseline + {len(llm_checks)} agent checks)", checks=merged)
 
 

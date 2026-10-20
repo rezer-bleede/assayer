@@ -330,7 +330,7 @@ async def _llm_candidates(
     if not llm_available():
         return []
     prompt = repair_prompt(spec.redacted(), failures, hints, databases)
-    raw = await ainvoke(prompt)
+    raw = await ainvoke(prompt, max_tokens=400)
     data = _parse_json_block(raw)
     candidates = data.get("candidates")
     if not isinstance(candidates, list):
