@@ -90,9 +90,7 @@ async def test_attempts_are_deduplicated() -> None:
         seen.append(cand)
         return cr.AttemptOutcome(ok=False, message="Connection refused")
 
-    await cr.repair_connection(
-        ch("localhost", 9002), attempt=attempt, hints={"port": 8123}
-    )
+    await cr.repair_connection(ch("localhost", 9002), attempt=attempt, hints={"port": 8123})
     keys = [(c.host, c.port, c.database) for c in seen]
     assert len(keys) == len(set(keys))
 
@@ -129,9 +127,7 @@ async def test_enumeration_uses_the_address_that_reached_the_server() -> None:
             return cr.AttemptOutcome(ok=False, message="Connection refused")
         if cand.database == "property_intel":
             return cr.AttemptOutcome(ok=True, message="connected")
-        return cr.AttemptOutcome(
-            ok=False, message="Database dubai_data_third_party does not exist"
-        )
+        return cr.AttemptOutcome(ok=False, message="Database dubai_data_third_party does not exist")
 
     def list_dbs(cand: ConnectionSpec) -> list[str]:
         enumerated_from.append(cand.host)
@@ -149,7 +145,8 @@ async def test_enumeration_uses_the_address_that_reached_the_server() -> None:
     assert result.suggested.database == "property_intel"
 
 
-async def test_llm_round_runs_only_after_the_ladder_and_never_sees_secrets(    monkeypatch: pytest.MonkeyPatch,
+async def test_llm_round_runs_only_after_the_ladder_and_never_sees_secrets(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, str] = {}
 

@@ -142,8 +142,10 @@ def parse_dbt_manifest(manifest: dict, label: str | None = None):
                     )
                 )
 
-        if any(t in _TEST_HINTS for t in
-               [x for c in cols.values() for x in c.get("data_tests", c.get("tests", []))]):
+        if any(
+            t in _TEST_HINTS
+            for t in [x for c in cols.values() for x in c.get("data_tests", c.get("tests", []))]
+        ):
             pass
         elif cols:
             risks.append(
@@ -172,13 +174,21 @@ def parse_dbt_manifest(manifest: dict, label: str | None = None):
 def _global_risks(manifest: dict) -> list[str]:
     out: list[str] = []
     nodes = manifest.get("nodes", {})
-    incremental = [n.get("name") for n in nodes.values() if n.get("config", {}).get("materialized") == "incremental"]
+    incremental = [
+        n.get("name")
+        for n in nodes.values()
+        if n.get("config", {}).get("materialized") == "incremental"
+    ]
     if incremental:
         out.append(
             f"Incremental models {incremental}: not idempotent by default; "
             "verify uniqueness and row-count growth per run"
         )
-    eph = [n.get("name") for n in nodes.values() if n.get("config", {}).get("materialized") == "ephemeral"]
+    eph = [
+        n.get("name")
+        for n in nodes.values()
+        if n.get("config", {}).get("materialized") == "ephemeral"
+    ]
     if eph:
         out.append(f"Ephemeral models {eph}: inlined as CTEs, no physical table to test directly")
     seeds = list(manifest.get("seeds", {}).keys())
@@ -195,8 +205,9 @@ def parse_dbt_files(files: dict[str, str], label: str | None = None):
     from app.parsers.sql_parser import parse_sql
     from app.schemas import EtlAnalysis
 
-    manifest = next((json.loads(v) for v in files.values() if v.strip().startswith("{")
-                     and "nodes" in v), None)
+    manifest = next(
+        (json.loads(v) for v in files.values() if v.strip().startswith("{") and "nodes" in v), None
+    )
     if manifest:
         return parse_dbt_manifest(manifest, label=label)
 
@@ -226,8 +237,11 @@ def parse_dbt_files(files: dict[str, str], label: str | None = None):
             edges.append(LineageEdge(source=ref, target=model))
             transformations.append(
                 Transformation(
-                    kind="ref", description=f"{{{{ ref('{ref}') }}}} in {model}",
-                    source=ref, target=model, confidence=1.0,
+                    kind="ref",
+                    description=f"{{{{ ref('{ref}') }}}} in {model}",
+                    source=ref,
+                    target=model,
+                    confidence=1.0,
                 )
             )
             # the first table a model reads is the one that sets its grain
@@ -253,8 +267,11 @@ def parse_dbt_files(files: dict[str, str], label: str | None = None):
                 primary_by_model[model] = full
             transformations.append(
                 Transformation(
-                    kind="source", description=f"{{{{ source('{src[0]}','{src[1]}') }}}} in {model}",
-                    source=full, target=model, confidence=1.0,
+                    kind="source",
+                    description=f"{{{{ source('{src[0]}','{src[1]}') }}}} in {model}",
+                    source=full,
+                    target=model,
+                    confidence=1.0,
                 )
             )
         transformations.extend(
@@ -314,6 +331,7 @@ def _dedupe(items: list[str]) -> list[str]:
 
 
 __all__ = ["parse_dbt_manifest", "parse_dbt_files"]
+
 
 def dbt_hints(files: dict[str, str]) -> tuple[dict[str, dict], list[dict]]:
     """Extract per-table database/schema + connection hints from dbt YAML.

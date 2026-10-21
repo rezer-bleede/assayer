@@ -61,7 +61,9 @@ class TestRunner:
         self.close()
 
     # -- execution ---------------------------------------------------------- #
-    async def run(self, run_id: str, plan: TestPlan, expected_row_counts: dict[str, int] | None = None) -> RunResult:
+    async def run(
+        self, run_id: str, plan: TestPlan, expected_row_counts: dict[str, int] | None = None
+    ) -> RunResult:
         started = datetime.now(UTC)
         t0 = time.perf_counter()
         result = RunResult(id=run_id, status=RunStatus.RUNNING, plan=plan, started_at=started)
@@ -176,7 +178,9 @@ class TestRunner:
 
         return base
 
-    def _evaluate(self, base: CheckResult, check: CheckSpec, row: dict, expected_counts: dict[str, int]) -> None:
+    def _evaluate(
+        self, base: CheckResult, check: CheckSpec, row: dict, expected_counts: dict[str, int]
+    ) -> None:
         kind = str(check.kind)
         total = float(row.get("total") or row.get("row_count") or 0) or 1.0
 
@@ -193,9 +197,7 @@ class TestRunner:
                 base.failed_rows = int(nulls)
                 base.status = status(rate <= thr)
                 base.message = (
-                    f"{nulls:,.0f}/{int(total):,} nulls ({rate:.3%})"
-                    if nulls
-                    else "no nulls"
+                    f"{nulls:,.0f}/{int(total):,} nulls ({rate:.3%})" if nulls else "no nulls"
                 )
 
             case "unique":
@@ -262,7 +264,11 @@ class TestRunner:
                 base.message = f"latest record: {latest}"
                 if latest:
                     try:
-                        ts = latest if isinstance(latest, datetime) else datetime.fromisoformat(str(latest))
+                        ts = (
+                            latest
+                            if isinstance(latest, datetime)
+                            else datetime.fromisoformat(str(latest))
+                        )
                         if ts.tzinfo is None:
                             ts = ts.replace(tzinfo=UTC)
                         age_h = (datetime.now(UTC) - ts).total_seconds() / 3600

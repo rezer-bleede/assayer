@@ -81,7 +81,15 @@ def test_pattern_without_regex_is_rejected() -> None:
 
 def test_column_level_kinds_without_a_column_are_rejected() -> None:
     """A missing column used to render literal SQL like `WHEN None IS NULL`."""
-    for kind_name in ("null_rate", "unique", "duplicate", "freshness", "min_max", "pattern", "distribution"):
+    for kind_name in (
+        "null_rate",
+        "unique",
+        "duplicate",
+        "freshness",
+        "min_max",
+        "pattern",
+        "distribution",
+    ):
         with pytest.raises(UnsafeSQLError, match="must name a column"):
             compile_check(_check(CheckKind(kind_name)), _conn())
 
@@ -151,8 +159,14 @@ def test_referential_check_gets_a_real_column() -> None:
     from app.agent.planner import SourceBinding
 
     target = SourceBinding(
-        source_id="c1", name="pg", schema="analytics", table="daily_revenue",
-        is_target=True, row_count=6, primary_keys=[], columns=["customer_id"],
+        source_id="c1",
+        name="pg",
+        schema="analytics",
+        table="daily_revenue",
+        is_target=True,
+        row_count=6,
+        primary_keys=[],
+        columns=["customer_id"],
     )
     checks = plan_checks(a, [target])
     refs = [c for c in checks if str(c.kind) == "referential"]
@@ -170,20 +184,36 @@ def test_parity_only_compares_the_driving_table() -> None:
 
     a = analyze_etl(EtlSubmit(language="sql", code=_SQL))
     target = SourceBinding(
-        source_id="c1", name="pg", schema="analytics", table="daily_revenue",
-        is_target=True, row_count=6, primary_keys=[], columns=["customer_id"],
+        source_id="c1",
+        name="pg",
+        schema="analytics",
+        table="daily_revenue",
+        is_target=True,
+        row_count=6,
+        primary_keys=[],
+        columns=["customer_id"],
     )
     orders = SourceBinding(
-        source_id="c1", name="pg", schema="raw", table="orders",
-        is_target=False, row_count=8, primary_keys=[], columns=["customer_id"],
+        source_id="c1",
+        name="pg",
+        schema="raw",
+        table="orders",
+        is_target=False,
+        row_count=8,
+        primary_keys=[],
+        columns=["customer_id"],
     )
     customers = SourceBinding(
-        source_id="c1", name="pg", schema="raw", table="customers",
-        is_target=False, row_count=4, primary_keys=[], columns=["customer_id"],
+        source_id="c1",
+        name="pg",
+        schema="raw",
+        table="customers",
+        is_target=False,
+        row_count=4,
+        primary_keys=[],
+        columns=["customer_id"],
     )
-    parity = [
-        c for c in plan_checks(a, [target, orders, customers]) if "parity" in c.tags
-    ]
+    parity = [c for c in plan_checks(a, [target, orders, customers]) if "parity" in c.tags]
     assert len(parity) == 1
     assert parity[0].params["expected_row_count"] == 8
 

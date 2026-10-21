@@ -37,7 +37,7 @@ from app.schemas import ColumnProfile, DataProfile
 MAX_SAMPLE_ROWS = 2_000
 MAX_SAMPLE_VALUES = 5
 MAX_COLUMNS = 200
-MAX_SCAN_BYTES = 4_000_000   # bytes actually parsed; the rest sets `truncated`
+MAX_SCAN_BYTES = 4_000_000  # bytes actually parsed; the rest sets `truncated`
 MAX_SAMPLE_STR = 64
 
 _NULLISH = {"", "null", "na", "n/a", "nan", "none", "nil", "-"}

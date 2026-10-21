@@ -155,8 +155,11 @@ def _port_options(spec: ConnectionSpec, hints: dict) -> list[tuple[int, str]]:
     opts: list[tuple[int, str]] = []
     if spec.type == SourceType.CLICKHOUSE and spec.port in _NATIVE_CH_PORTS:
         opts += [
-            (p, f"port {spec.port} is ClickHouse's native TCP protocol; "
-                f"the HTTP interface is on {p}")
+            (
+                p,
+                f"port {spec.port} is ClickHouse's native TCP protocol; "
+                f"the HTTP interface is on {p}",
+            )
             for p in _CH_HTTP_PORTS
         ]
     declared = hints.get("port")

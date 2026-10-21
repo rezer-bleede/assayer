@@ -97,6 +97,7 @@ def test_etl_submit_roundtrip() -> None:
     submit = EtlSubmit(language="sql", code="SELECT 1")
     assert submit.language == "sql"
 
+
 async def test_from_url_connects_when_parseable() -> None:
     """A URL-shaped input parses and *attempts* a connection (which then fails)."""
     from fastapi import HTTPException
@@ -104,9 +105,7 @@ async def test_from_url_connects_when_parseable() -> None:
     from app.routers.connections import FromUrlRequest, connect_from_url
 
     try:
-        await connect_from_url(
-            FromUrlRequest(url="postgresql://u:p@no-such-host.invalid:5432/db")
-        )
+        await connect_from_url(FromUrlRequest(url="postgresql://u:p@no-such-host.invalid:5432/db"))
     except HTTPException as exc:
         # only the parse failure surfaces as 422; DNS failure is a red ok=False
         raise AssertionError(f"unexpected 422 for a valid URL shape: {exc.detail}") from exc
@@ -140,9 +139,7 @@ async def test_from_url_rejects_non_url_with_clear_message() -> None:
 
 
 def test_parse_clickhouse_url() -> None:
-    spec = parse_url(
-        "clickhouse://analyst:s3cret@analytics-ch.internal:8123/warehouse?secure=true"
-    )
+    spec = parse_url("clickhouse://analyst:s3cret@analytics-ch.internal:8123/warehouse?secure=true")
     assert spec is not None
     assert spec.type is SourceType.CLICKHOUSE
     assert spec.host == "analytics-ch.internal"
@@ -155,9 +152,7 @@ def test_parse_clickhouse_url() -> None:
 def test_clickhouse_word_guess() -> None:
     from app.services.ingest import guess_type
 
-    assert guess_type("our events live in clickhouse on the intranet") is (
-        SourceType.CLICKHOUSE
-    )
+    assert guess_type("our events live in clickhouse on the intranet") is (SourceType.CLICKHOUSE)
 
 
 def test_diagnosis_lists_clickhouse_as_supported() -> None:
@@ -294,9 +289,7 @@ def test_parse_url_strips_trailing_prose_from_database() -> None:
     # The regex lookahead should stop at the camelCase boundary before 'I'
     assert spec is not None
     assert spec.database is not None
-    assert spec.database == "property_intel", (
-        f"Expected 'property_intel', got {spec.database!r}"
-    )
+    assert spec.database == "property_intel", f"Expected 'property_intel', got {spec.database!r}"
 
 
 def test_extract_connections_trailing_sentence() -> None:

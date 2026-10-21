@@ -41,7 +41,9 @@ def test_remote_refusal_gets_no_container_hint() -> None:
 
 
 def test_localhost_unrelated_error_gets_no_hint() -> None:
-    assert localhost_hint(_spec(host="localhost", port=5432), "password authentication failed") is None
+    assert (
+        localhost_hint(_spec(host="localhost", port=5432), "password authentication failed") is None
+    )
 
 
 def test_loopback_variants_count() -> None:

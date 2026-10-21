@@ -13,9 +13,7 @@ from app.schemas import ConnectionSpec, RunResult, RunStatus, TestPlan
 from app.services.orchestrator import introspect_all, profile_focus, run_audit
 from app.store import repository as repo
 
-router = APIRouter(
-    prefix="/api/runs", tags=["runs"], route_class=SafeAPIRoute
-)
+router = APIRouter(prefix="/api/runs", tags=["runs"], route_class=SafeAPIRoute)
 
 
 class PlanRequest(BaseModel):
@@ -49,12 +47,8 @@ async def create_plan(req: PlanRequest) -> PlanResponse:
     introspected = introspect_all(connections)
     analysis = repo.get_etl(req.etl_id) if req.etl_id else None
     bindings = bind_sources(analysis, connections, introspected) if analysis else []
-    profiles = profile_focus(
-        connections, introspected, [(b.schema, b.table) for b in bindings]
-    )
-    plan = await build_plan(
-        analysis, bindings, req.user_intent, req.use_llm, profiles=profiles
-    )
+    profiles = profile_focus(connections, introspected, [(b.schema, b.table) for b in bindings])
+    plan = await build_plan(analysis, bindings, req.user_intent, req.use_llm, profiles=profiles)
     missing = find_unresolved(analysis, bindings)
     if not plan.checks:
         raise HTTPException(
@@ -148,9 +142,11 @@ def get_report(run_id: str, fmt: str = "markdown") -> dict[str, Any]:
     if fmt == "json":
         from app.agent.tools.report import structured_summary
 
-        return {"run_id": run_id, "summary": structured_summary(run), "results": [
-            r.model_dump(mode="json") for r in run.results
-        ]}
+        return {
+            "run_id": run_id,
+            "summary": structured_summary(run),
+            "results": [r.model_dump(mode="json") for r in run.results],
+        }
     return {
         "run_id": run_id,
         "markdown": run.narrative or "",
@@ -171,15 +167,33 @@ def export(run_id: str) -> Response:
     w = csv.writer(buf)
     w.writerow(
         [
-            "check", "table", "column", "kind", "severity", "status",
-            "observed", "expected", "failed_rows", "message", "duration_ms",
+            "check",
+            "table",
+            "column",
+            "kind",
+            "severity",
+            "status",
+            "observed",
+            "expected",
+            "failed_rows",
+            "message",
+            "duration_ms",
         ]
     )
     for r in run.results:
         w.writerow(
             [
-                r.name, r.table.fqn, r.column, r.kind, r.severity, r.status,
-                r.observed, r.expected, r.failed_rows, r.message, r.duration_ms,
+                r.name,
+                r.table.fqn,
+                r.column,
+                r.kind,
+                r.severity,
+                r.status,
+                r.observed,
+                r.expected,
+                r.failed_rows,
+                r.message,
+                r.duration_ms,
             ]
         )
     return Response(

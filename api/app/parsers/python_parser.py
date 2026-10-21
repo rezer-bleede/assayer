@@ -34,16 +34,43 @@ _READERS = {
 
 # write functions (pandas, Spark, dask)
 _SINKS = {
-    "to_sql", "to_parquet", "to_csv", "to_json", "save", "write",
-    "saveAsTable", "save_as_table", "insertInto", "insert_into",
-    "to_delta", "to_database", "createOrReplaceTempView",
+    "to_sql",
+    "to_parquet",
+    "to_csv",
+    "to_json",
+    "save",
+    "write",
+    "saveAsTable",
+    "save_as_table",
+    "insertInto",
+    "insert_into",
+    "to_delta",
+    "to_database",
+    "createOrReplaceTempView",
 }
 
 # dataframe operations that carry data forward
 _PASSTHROUGH = {
-    "merge", "join", "assign", "query", "filter", "with_column", "select",
-    "groupby", "agg", "reset_index", "rename", "drop_duplicates", "dropna",
-    "fillna", "astype", "sort_values", "head", "to_frame", "melt", "explode",
+    "merge",
+    "join",
+    "assign",
+    "query",
+    "filter",
+    "with_column",
+    "select",
+    "groupby",
+    "agg",
+    "reset_index",
+    "rename",
+    "drop_duplicates",
+    "dropna",
+    "fillna",
+    "astype",
+    "sort_values",
+    "head",
+    "to_frame",
+    "melt",
+    "explode",
 }
 
 # aggregation entry points
@@ -197,16 +224,21 @@ class _Var:
         self.tables = tables
 
 
-def analyze_python(code: str) -> tuple[
-    list[Transformation], list[LineageEdge], list[str], list[str], dict
-]:
+def analyze_python(
+    code: str,
+) -> tuple[list[Transformation], list[LineageEdge], list[str], list[str], dict]:
     try:
         tree = ast.parse(code)
     except SyntaxError as exc:
         return (
-            [Transformation(kind="parse_error", description=f"Syntax error: {exc.msg}",
-                            confidence=1.0)],
-            [], [], [],
+            [
+                Transformation(
+                    kind="parse_error", description=f"Syntax error: {exc.msg}", confidence=1.0
+                )
+            ],
+            [],
+            [],
+            [],
             {"parse_error": exc.msg, "line": exc.lineno},
         )
 
@@ -218,7 +250,7 @@ def analyze_python(code: str) -> tuple[
     aggregations: list[dict] = []
     filters: list[dict] = []
 
-    vars_: dict[str, _Var] = {}          # var -> tables it derives from
+    vars_: dict[str, _Var] = {}  # var -> tables it derives from
     sinks: list[tuple[str, list[str]]] = []  # (target table, upstream tables)
 
     for node in ast.walk(tree):
@@ -232,9 +264,8 @@ def analyze_python(code: str) -> tuple[
 
             if final in _READERS:
                 kind = _READERS[final]
-                src = (
-                    _first_string(call, ("sql", "query", "table_name", "name"))
-                    or _literal(call.args[-1] if call.args else None)
+                src = _first_string(call, ("sql", "query", "table_name", "name")) or _literal(
+                    call.args[-1] if call.args else None
                 )
                 tables = _extract_tables(src) if kind == "sql_source" else ([src] if src else [])
                 vars_[bound] = _Var(bound, _dedupe(tables))
@@ -254,7 +285,11 @@ def analyze_python(code: str) -> tuple[
                 if final in {"merge", "join"}:
                     recv = _receiver(call)
                     right = (
-                        _df_name(call.args[0]) if call.args else _df_name(recv) if recv is not None else ""
+                        _df_name(call.args[0])
+                        if call.args
+                        else _df_name(recv)
+                        if recv is not None
+                        else ""
                     ) or "?"
                     on_kw = next((k for k in call.keywords if k.arg == "on"), None)
                     how_kw = next((k for k in call.keywords if k.arg == "how"), None)
@@ -315,9 +350,8 @@ def analyze_python(code: str) -> tuple[
                 )
 
             if final in _SINKS:
-                target = (
-                    _first_string(node, ("name", "table", "path"))
-                    or _literal(node.args[0] if node.args else None)
+                target = _first_string(node, ("name", "table", "path")) or _literal(
+                    node.args[0] if node.args else None
                 )
                 table = _target_name(target)
                 bound = _df_name(recv) if recv is not None else None
@@ -350,9 +384,7 @@ def analyze_python(code: str) -> tuple[
                 if "insert" in stmt.lower() or "create" in stmt.lower():
                     tbl = _extract_tables(stmt)
                     if tbl:
-                        sinks.append(
-                            (tbl[0], list(vars_.get(_df_name(recv), _Var("", [])).tables))
-                        )
+                        sinks.append((tbl[0], list(vars_.get(_df_name(recv), _Var("", [])).tables)))
                         transformations.append(
                             Transformation(
                                 kind="write", description=f"SQL write into {tbl[0]}", target=tbl[0]
@@ -412,13 +444,9 @@ def _risks(code: str) -> list[str]:
             "drop_duplicates hides genuine duplicate source rows; verify uniqueness on target"
         )
     if "fillna" in low:
-        risks.append(
-            "fillna imputes missing values; null-rate checks will pass by construction"
-        )
+        risks.append("fillna imputes missing values; null-rate checks will pass by construction")
     if ".merge(" in low:
-        risks.append(
-            "DataFrame.merge defaults to an inner join: confirm no rows are lost"
-        )
+        risks.append("DataFrame.merge defaults to an inner join: confirm no rows are lost")
     if "how='left'" in low or 'how="left"' in low:
         risks.append("LEFT merge: expect NULLs in newly introduced columns")
     if "astype" in low:

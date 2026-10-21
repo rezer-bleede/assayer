@@ -49,9 +49,7 @@ def test_acceptance_words_are_not_plan_approval() -> None:
 
 
 def test_adopting_a_pending_connection_saves_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        chat.repo, "save_connection", lambda s, sid: SimpleNamespace(id="conn-9")
-    )
+    monkeypatch.setattr(chat.repo, "save_connection", lambda s, sid: SimpleNamespace(id="conn-9"))
     ctx = {
         "pending_connection": {
             "spec": spec("host.docker.internal", 8123).model_dump(mode="json"),
@@ -75,9 +73,7 @@ async def test_absorb_saves_a_connection_that_just_works(
     monkeypatch.setattr(
         chat, "probe_attempt", lambda cand, tables=None: AttemptOutcome(ok=True, message="ok")
     )
-    monkeypatch.setattr(
-        chat.repo, "save_connection", lambda s, sid: SimpleNamespace(id="conn-1")
-    )
+    monkeypatch.setattr(chat.repo, "save_connection", lambda s, sid: SimpleNamespace(id="conn-1"))
     ctx: dict = {}
     buf = EventBuffer()
 

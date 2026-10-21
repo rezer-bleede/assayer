@@ -72,7 +72,10 @@ def interpret_prompt(
     state_summary: str,
     available_sources: list[dict],
 ) -> str:
-    srcs = "\n".join(f"- id={s['id']} {s['name']} ({s['type']})" for s in available_sources) or "- none"
+    srcs = (
+        "\n".join(f"- id={s['id']} {s['name']} ({s['type']})" for s in available_sources)
+        or "- none"
+    )
     return f"""## Conversation state
 {state_summary}
 
@@ -132,26 +135,25 @@ def repair_prompt(
     the driver error text. Username and password are deliberately absent — the
     model must fix addressing, not credentials.
     """
-    tried = "\n".join(
-        f"- host={f.get('host')!r} port={f.get('port')!r} database={f.get('database')!r}"
-        f" -> {f.get('error')}"
-        for f in failures
-    ) or "- (nothing tried yet)"
-    db_line = (
-        f"\nDatabases that exist on that server: {', '.join(databases)}"
-        if databases
-        else ""
+    tried = (
+        "\n".join(
+            f"- host={f.get('host')!r} port={f.get('port')!r} database={f.get('database')!r}"
+            f" -> {f.get('error')}"
+            for f in failures
+        )
+        or "- (nothing tried yet)"
     )
+    db_line = f"\nDatabases that exist on that server: {', '.join(databases)}" if databases else ""
     return f"""A database connection keeps failing. Propose the most likely fixes.
 
 {REPAIR_ENVIRONMENT}
 
 Connection (secrets omitted):
-  engine: {spec.get('type')}
-  host: {spec.get('host')!r}
-  port: {spec.get('port')!r}
-  database: {spec.get('database')!r}
-  schema: {spec.get('schema')!r}
+  engine: {spec.get("type")}
+  host: {spec.get("host")!r}
+  port: {spec.get("port")!r}
+  database: {spec.get("database")!r}
+  schema: {spec.get("schema")!r}
 
 Evidence from the user's code (may itself be stale): {hints}
 

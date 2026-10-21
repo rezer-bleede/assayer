@@ -37,16 +37,21 @@ def _column_list(node: exp.Expression | None) -> list[str]:
     return []
 
 
-def analyze_sql(code: str, label: str | None = None) -> tuple[
-    list[Transformation], list[LineageEdge], list[str], list[str], dict
-]:
+def analyze_sql(
+    code: str, label: str | None = None
+) -> tuple[list[Transformation], list[LineageEdge], list[str], list[str], dict]:
     transformations: list[Transformation] = []
     edges: list[LineageEdge] = []
     sources: list[str] = []
     targets: list[str] = []
     extras: dict = {
-        "joins": [], "filters": [], "aggregations": [], "statements": [],
-        "ctes": [], "primary_source": [], "grain": {},
+        "joins": [],
+        "filters": [],
+        "aggregations": [],
+        "statements": [],
+        "ctes": [],
+        "primary_source": [],
+        "grain": {},
     }
     primary_source: str | None = None
 
@@ -83,7 +88,8 @@ def analyze_sql(code: str, label: str | None = None) -> tuple[
             transformations.append(
                 Transformation(
                     kind="cte",
-                    description=f"CTE '{alias}' defined" + (
+                    description=f"CTE '{alias}' defined"
+                    + (
                         f" from {', '.join(t for t in inner_tables[:3] if t)}"
                         if inner_tables
                         else ""
@@ -180,7 +186,9 @@ def analyze_sql(code: str, label: str | None = None) -> tuple[
                 how = "full"
             extras["joins"].append(
                 {
-                    "right_table": _table_name(join.this) if isinstance(join.this, exp.Table) else None,
+                    "right_table": _table_name(join.this)
+                    if isinstance(join.this, exp.Table)
+                    else None,
                     "kind": how.lower(),
                     "on": on.sql()[:300] if on else None,
                     "using": [c.name for c in (join.args.get("using") or [])]
@@ -316,7 +324,9 @@ def _regex_fallback(code: str) -> list[Transformation]:
     out: list[Transformation] = []
     targets = _TARGET_RE.findall(code)
     for t in targets:
-        out.append(Transformation(kind="write", description=f"Writes into {t}", target=t, confidence=0.4))
+        out.append(
+            Transformation(kind="write", description=f"Writes into {t}", target=t, confidence=0.4)
+        )
     for j in _JOIN_RE.findall(code):
         out.append(Transformation(kind="join", description=f"Joins {j}", source=j, confidence=0.4))
     return out
@@ -327,7 +337,9 @@ def _regex_lineage(code: str) -> list[LineageEdge]:
     if not targets:
         return []
     tgt = targets[0]
-    return [LineageEdge(source=s, target=tgt) for s in _FROM_RE.findall(code) + _JOIN_RE.findall(code)]
+    return [
+        LineageEdge(source=s, target=tgt) for s in _FROM_RE.findall(code) + _JOIN_RE.findall(code)
+    ]
 
 
 def parse_sql(code: str, label: str | None = None):

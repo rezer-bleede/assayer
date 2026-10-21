@@ -33,12 +33,15 @@ JOIN raw.customers c ON c.customer_id = o.customer_id
 WHERE o.status = 'paid'
 GROUP BY o.order_id, o.customer_id, c.country"""
 
-    resp = post("/api/etl/analyze", {
-        "language": "sql",
-        "code": etl_code,
-        "label": "daily_revenue",
-        "origin": "paste",
-    })
+    resp = post(
+        "/api/etl/analyze",
+        {
+            "language": "sql",
+            "code": etl_code,
+            "label": "daily_revenue",
+            "origin": "paste",
+        },
+    )
     print(json.dumps(resp, indent=2)[:2000])
     etl_id = resp["analysis"]["id"]
     print(f"\nETL ID: {etl_id}")
@@ -57,10 +60,13 @@ GROUP BY o.order_id, o.customer_id, c.country"""
     # Step 4: Try to plan without connections - should fail gracefully
     print("\n=== Step 4: Try to plan without connections ===")
     try:
-        resp = post("/api/runs/plan", {
-            "connection_ids": [],
-            "etl_id": etl_id,
-        })
+        resp = post(
+            "/api/runs/plan",
+            {
+                "connection_ids": [],
+                "etl_id": etl_id,
+            },
+        )
         print(json.dumps(resp, indent=2)[:500])
     except urllib.error.HTTPError as e:
         print(f"Expected error (no connections): {e.code} {e.read().decode()[:200]}")

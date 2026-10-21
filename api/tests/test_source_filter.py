@@ -133,7 +133,10 @@ def test_trust_mode_accepts_anything_textual() -> None:
 def test_trust_mode_allows_a_file_beyond_the_code_cap() -> None:
     """A deliberately picked 3 MB CSV is not "too big for a dbt model"."""
     verdict = classify(
-        "orders.csv", size=3_000_000, max_file_bytes=131_072, data_max_bytes=8_000_000,
+        "orders.csv",
+        size=3_000_000,
+        max_file_bytes=131_072,
+        data_max_bytes=8_000_000,
         trust=True,
     )
     assert verdict.kind is Kind.CODE
@@ -142,7 +145,10 @@ def test_trust_mode_allows_a_file_beyond_the_code_cap() -> None:
     )
     assert strict.kind is Kind.DATA
     over = classify(
-        "orders.csv", size=90_000_000, max_file_bytes=131_072, data_max_bytes=8_000_000,
+        "orders.csv",
+        size=90_000_000,
+        max_file_bytes=131_072,
+        data_max_bytes=8_000_000,
         trust=True,
     )
     assert over.reason is Skip.SIZE
@@ -201,7 +207,11 @@ def test_assemble_keeps_relevant_skips_junk_with_note() -> None:
     assert list(intake.contents) == ["proj/models/orders.sql"]
     assert intake.manifest is None
     assert intake.notes and "Ignored" in intake.notes[0]
-    assert ".git" in intake.notes[0] or "VCS" in intake.notes[0] or "metadata" in intake.notes[0].lower()
+    assert (
+        ".git" in intake.notes[0]
+        or "VCS" in intake.notes[0]
+        or "metadata" in intake.notes[0].lower()
+    )
 
 
 def test_assemble_profiles_seeds_without_reading_the_body() -> None:
@@ -211,7 +221,7 @@ def test_assemble_profiles_seeds_without_reading_the_body() -> None:
         ("proj/models/stg_orders.sql", SQL),
     )
     intake = assemble_sources(items, max_files=50, max_file_bytes=100, data_max_bytes=10_000)
-    assert intake.contents["proj/seeds/raw_orders.csv"] == ""   # name only
+    assert intake.contents["proj/seeds/raw_orders.csv"] == ""  # name only
     assert intake.contents["proj/models/stg_orders.sql"] == SQL.decode()
     assert len(intake.profiles) == 1
     profile = intake.profiles[0]
@@ -259,7 +269,10 @@ def test_big_json_is_profiled_not_parsed() -> None:
 def test_generated_and_dump_files_are_dropped_with_a_reason() -> None:
     items = _items(
         ("models/bundle.sql", (b"x" * 600 + b"\n") * 10),
-        ("models/rows.sql", b"\n".join(f"INSERT INTO t VALUES ({i});".encode() for i in range(400))),
+        (
+            "models/rows.sql",
+            b"\n".join(f"INSERT INTO t VALUES ({i});".encode() for i in range(400)),
+        ),
         ("models/good.sql", SQL),
     )
     intake = assemble_sources(items, max_files=50, max_file_bytes=100_000)
@@ -270,9 +283,7 @@ def test_generated_and_dump_files_are_dropped_with_a_reason() -> None:
 
 def test_total_budget_stops_source_reading() -> None:
     items = _items(*[(f"m/{i}.sql", b"select 1;\n" * 40) for i in range(20)])
-    intake = assemble_sources(
-        items, max_files=50, max_file_bytes=10_000, max_total_bytes=200
-    )
+    intake = assemble_sources(items, max_files=50, max_file_bytes=10_000, max_total_bytes=200)
     assert len(intake.contents) < 20
     assert "budget" in intake.notes[0]
 

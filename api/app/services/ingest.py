@@ -40,6 +40,7 @@ def _clean_db(raw: str | None) -> str | None:
     cleaned = _DB_PROSE_RE.split(raw, maxsplit=1)[0]
     return cleaned or None
 
+
 _SCHEME_MAP = {
     "postgresql": SourceType.POSTGRES,
     "postgres": SourceType.POSTGRES,
@@ -221,8 +222,28 @@ def parse_json_block(text: str) -> ConnectionSpec | None:
 
 
 _FILLER = {
-    "is", "was", "are", "the", "a", "an", "at", "on", "in", "to", "and", "or",
-    "as", "with", "equals", "here", "that", "this", "my", "our", "but", "so",
+    "is",
+    "was",
+    "are",
+    "the",
+    "a",
+    "an",
+    "at",
+    "on",
+    "in",
+    "to",
+    "and",
+    "or",
+    "as",
+    "with",
+    "equals",
+    "here",
+    "that",
+    "this",
+    "my",
+    "our",
+    "but",
+    "so",
 }
 
 
@@ -393,6 +414,7 @@ def looks_like_code(text: str, min_len: int = 40) -> bool:
     return len(text.strip()) >= min_len and bool(
         _SQL_HINT.search(text) or _PY_HINT.search(text) or _DBT_HINT.search(text)
     )
+
 
 # --------------------------------------------------------------------------- #
 # templated YAML values

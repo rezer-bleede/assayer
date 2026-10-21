@@ -53,13 +53,17 @@ def profile_table(
             rc = None
         profiles: list[dict[str, Any]] = []
         for c in cols:
-            entry: dict[str, Any] = {"name": c.name, "data_type": c.data_type, "nullable": c.nullable}
+            entry: dict[str, Any] = {
+                "name": c.name,
+                "data_type": c.data_type,
+                "nullable": c.nullable,
+            }
             try:
                 q = (
-                    f'SELECT COUNT(*) AS total, '
+                    f"SELECT COUNT(*) AS total, "
                     f'SUM(CASE WHEN "{c.name}" IS NULL THEN 1 ELSE 0 END) AS nulls, '
                     f'COUNT(DISTINCT "{c.name}") AS distinct_values '
-                    f'FROM {conn.quote_table(schema, table)}'
+                    f"FROM {conn.quote_table(schema, table)}"
                 )
                 row = conn.query(q).rows[0]
                 total = float(row.get("total") or 0) or 1.0

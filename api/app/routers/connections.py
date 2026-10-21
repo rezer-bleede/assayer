@@ -24,9 +24,7 @@ from app.services.connection_repair import (
 from app.services.ingest import _SCHEME_MAP, extract_connections_async
 from app.store import repository as repo
 
-router = APIRouter(
-    prefix="/api/connections", tags=["connections"], route_class=SafeAPIRoute
-)
+router = APIRouter(prefix="/api/connections", tags=["connections"], route_class=SafeAPIRoute)
 
 
 class TestConnectionRequest(BaseModel):
@@ -60,7 +58,15 @@ def list_sources() -> dict[str, Any]:
             "postgres": ["host", "port", "database", "schema_", "username", "password"],
             "mysql": ["host", "port", "database", "username", "password"],
             "clickhouse": ["host", "port", "database", "username", "password"],
-            "snowflake": ["account", "warehouse", "role", "database", "schema_", "username", "password"],
+            "snowflake": [
+                "account",
+                "warehouse",
+                "role",
+                "database",
+                "schema_",
+                "username",
+                "password",
+            ],
             "bigquery": ["database", "credentials_json"],
             "databricks": ["host", "http_path", "database", "token"],
             "mssql": ["host", "port", "database", "username", "password"],
@@ -135,7 +141,9 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
     """Verify a connection, and say whether it actually holds the tables we need."""
     spec = _with_options(req.spec, req.tables, req.target_tables, req.requirement_key)
     status, matched, unmatched = probe(spec, req.tables)
-    connection_id = repo.save_connection(spec, req.session_id).id if (status.ok and req.persist) else None
+    connection_id = (
+        repo.save_connection(spec, req.session_id).id if (status.ok and req.persist) else None
+    )
     return TestConnectionResponse(
         connection_id=connection_id,
         status=status,
@@ -163,10 +171,7 @@ def _url_diagnosis(url: str) -> str:
         scheme = m.group(1).lower()
         if scheme not in _SCHEME_MAP:
             supported = ", ".join(sorted(set(_SCHEME_MAP)))
-            return (
-                f"Unsupported connection scheme {scheme!r}://. "
-                f"Supported: {supported}."
-            )
+            return f"Unsupported connection scheme {scheme!r}://. Supported: {supported}."
         return (
             f"I could not read the host/database out of that {scheme}:// URL. "
             "Expected scheme://user:password@host:port/database — a password "
@@ -234,11 +239,17 @@ def _to_response(
     a repaired one is offered as a suggestion for the client to confirm, so a
     guess drawn from a stale ETL hint never silently becomes the connection.
     """
-    status = result.outcome.status if result.outcome and result.outcome.status else ConnectionStatus(
-        ok=False, type=given.type, name=given.name, message=result.note or "connection failed"
+    status = (
+        result.outcome.status
+        if result.outcome and result.outcome.status
+        else ConnectionStatus(
+            ok=False, type=given.type, name=given.name, message=result.note or "connection failed"
+        )
     )
     connection_id = (
-        repo.save_connection(given, session_id).id if (persist and result.ok and not result.repaired) else None
+        repo.save_connection(given, session_id).id
+        if (persist and result.ok and not result.repaired)
+        else None
     )
     return TestConnectionResponse(
         connection_id=connection_id,

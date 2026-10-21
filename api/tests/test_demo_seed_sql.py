@@ -54,10 +54,7 @@ def test_demo_sql_is_idempotent(path: Path) -> None:
         raise AssertionError(f"{path.name}: unguarded CREATE at offset {match.start()}")
     inserts = re.findall(r"INSERT INTO\s+([\w.]+)", text, re.I)
     assert inserts, f"{path.name} inserts nothing"
-    guarded = (
-        "ON CONFLICT" in text.upper()
-        or "WHERE NOT EXISTS" in text.upper()
-    )
+    guarded = "ON CONFLICT" in text.upper() or "WHERE NOT EXISTS" in text.upper()
     assert guarded, f"{path.name} inserts without a guard — it would duplicate rows"
 
 
@@ -77,9 +74,7 @@ def test_dirty_dataset_carries_its_defects() -> None:
     # break the demo.
     hours = [int(h) for h in re.findall(r"interval '(\d+) hours'", text)]
     assert hours, "the timestamps are not relative to the seed time"
-    assert min(hours) > 24, (
-        "a seeded row is fresh enough to pass the 24h freshness check"
-    )
+    assert min(hours) > 24, "a seeded row is fresh enough to pass the 24h freshness check"
 
 
 def test_jaffle_dataset_carries_its_defects() -> None:

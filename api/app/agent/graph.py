@@ -78,19 +78,32 @@ def node_profile(state: AgentState, emit=make_emitter([])) -> AgentState:
             emit("source.error", {"source_id": cid, "error": data.get("error")})
             log.warning("introspection failed", source=spec.name, error=data.get("error"))
 
-    bindings = bind_sources(state["analysis"] or _noop_analysis(), state["connections"], introspected)
+    bindings = bind_sources(
+        state["analysis"] or _noop_analysis(), state["connections"], introspected
+    )
     emit(
         "lineage.bound",
         {"bound": [f"{b.source_id}:{b.schema or '.'}{b.table}" for b in bindings]},
     )
-    return {**state, "introspected": introspected, "profiles": profiles,
-            "bindings": [b.__dict__ if not hasattr(b, "__slots__") else _bd(b) for b in bindings]}
+    return {
+        **state,
+        "introspected": introspected,
+        "profiles": profiles,
+        "bindings": [b.__dict__ if not hasattr(b, "__slots__") else _bd(b) for b in bindings],
+    }
 
 
 def _bd(b: SourceBinding) -> dict:
-    return {"source_id": b.source_id, "name": b.name, "schema": b.schema, "table": b.table,
-            "is_target": b.is_target, "row_count": b.row_count, "primary_keys": b.primary_keys,
-            "columns": b.columns}
+    return {
+        "source_id": b.source_id,
+        "name": b.name,
+        "schema": b.schema,
+        "table": b.table,
+        "is_target": b.is_target,
+        "row_count": b.row_count,
+        "primary_keys": b.primary_keys,
+        "columns": b.columns,
+    }
 
 
 def _bindings(state: AgentState) -> list[SourceBinding]:

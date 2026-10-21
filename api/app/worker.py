@@ -63,7 +63,9 @@ async def process_job(job: dict) -> None:
     analysis = repo.get_etl(job.get("etl_id")) if job.get("etl_id") else None
 
     def emit(event: str, data: dict) -> None:
-        asyncio.create_task(publish_progress(event, {**data, "run_id": run_id, "session_id": session_id}))
+        asyncio.create_task(
+            publish_progress(event, {**data, "run_id": run_id, "session_id": session_id})
+        )
 
     result = await run_audit(run_id, plan, connections, analysis, session_id, emit=emit)
     _results.append(result)

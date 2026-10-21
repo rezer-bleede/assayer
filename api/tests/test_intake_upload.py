@@ -34,9 +34,7 @@ class _Upload:
 
 
 def _call(files: list[tuple[str, bytes]], *, mode: str = "folder", paths: str | None = None):
-    uploads = [
-        _Upload(filename=rel.rsplit("/", 1)[-1], payload=body) for rel, body in files
-    ]
+    uploads = [_Upload(filename=rel.rsplit("/", 1)[-1], payload=body) for rel, body in files]
     return asyncio.run(
         etl_router.upload(
             session_id=None,
@@ -231,6 +229,7 @@ def test_malformed_source_fails_as_400_not_500() -> None:
 
     monkey_original = etl_router.analyze_etl
     try:
+
         def _boom(submit):
             raise RuntimeError("parser choked")
 

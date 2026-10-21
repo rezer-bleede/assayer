@@ -81,8 +81,14 @@ def test_plan_adds_row_count_parity_between_source_and_target() -> None:
     bindings = [
         _binding(),
         SourceBinding(
-            source_id="c1", name="pg", schema="raw", table="orders",
-            is_target=False, row_count=1000, primary_keys=[], columns=["customer_id"],
+            source_id="c1",
+            name="pg",
+            schema="raw",
+            table="orders",
+            is_target=False,
+            row_count=1000,
+            primary_keys=[],
+            columns=["customer_id"],
         ),
     ]
     checks = plan_checks(analysis, bindings)
@@ -97,10 +103,26 @@ def test_parity_is_skipped_when_the_driving_table_is_unknown() -> None:
     """Without grain evidence a parity check would compare mismatched grains."""
     analysis = EtlAnalysis(language="sql", sources=["raw.orders"], targets=["analytics.rev"])
     bindings = [
-        SourceBinding(source_id="c1", name="pg", schema="analytics", table="daily_revenue",
-                      is_target=True, row_count=6, primary_keys=[], columns=["order_id"]),
-        SourceBinding(source_id="c1", name="pg", schema="raw", table="orders",
-                      is_target=False, row_count=8, primary_keys=[], columns=["order_id"]),
+        SourceBinding(
+            source_id="c1",
+            name="pg",
+            schema="analytics",
+            table="daily_revenue",
+            is_target=True,
+            row_count=6,
+            primary_keys=[],
+            columns=["order_id"],
+        ),
+        SourceBinding(
+            source_id="c1",
+            name="pg",
+            schema="raw",
+            table="orders",
+            is_target=False,
+            row_count=8,
+            primary_keys=[],
+            columns=["order_id"],
+        ),
     ]
     assert not [c for c in plan_checks(analysis, bindings) if "parity" in c.tags]
 
@@ -113,12 +135,36 @@ def test_parity_pairs_only_the_targets_own_driver() -> None:
         grain={"orders": "raw.orders"},
     )
     bindings = [
-        SourceBinding(source_id="c1", name="pg", schema="analytics", table="orders",
-                      is_target=True, row_count=8, primary_keys=[], columns=["id"]),
-        SourceBinding(source_id="c1", name="pg", schema="raw", table="orders",
-                      is_target=False, row_count=8, primary_keys=[], columns=["id"]),
-        SourceBinding(source_id="c1", name="pg", schema="raw", table="customers",
-                      is_target=False, row_count=3, primary_keys=[], columns=["id"]),
+        SourceBinding(
+            source_id="c1",
+            name="pg",
+            schema="analytics",
+            table="orders",
+            is_target=True,
+            row_count=8,
+            primary_keys=[],
+            columns=["id"],
+        ),
+        SourceBinding(
+            source_id="c1",
+            name="pg",
+            schema="raw",
+            table="orders",
+            is_target=False,
+            row_count=8,
+            primary_keys=[],
+            columns=["id"],
+        ),
+        SourceBinding(
+            source_id="c1",
+            name="pg",
+            schema="raw",
+            table="customers",
+            is_target=False,
+            row_count=3,
+            primary_keys=[],
+            columns=["id"],
+        ),
     ]
     parity = [c for c in plan_checks(analysis, bindings) if "parity" in c.tags]
     assert len(parity) == 1
@@ -151,6 +197,7 @@ def test_analysis_risks_are_surfaced(risk_text: str) -> None:
         EtlSubmit(language="sql", code=f"INSERT INTO t SELECT * FROM s {risk_text} s2 ON s.a=s2.a")
     )
     assert a.risks
+
 
 # --- file -> warehouse contract (data profiles) ----------------------------- #
 

@@ -271,8 +271,7 @@ def collect(
 
     if unprofiled:
         warnings.append(
-            f"{unprofiled} further data file(s) not profiled "
-            f"(cap {settings.intake_data_max_files})"
+            f"{unprofiled} further data file(s) not profiled (cap {settings.intake_data_max_files})"
         )
     if not files:
         _refuse("No .sql / .py / .yml source files found in that repository.")

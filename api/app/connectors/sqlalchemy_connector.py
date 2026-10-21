@@ -88,8 +88,12 @@ class SqlAlchemyConnector(Connector):
     def _engine(self) -> Any:
         if self._eng is None:
             url = self._url()
-            log.info("connecting", type=str(self.source_type), host=self.spec.host,
-                     database=self.spec.database)
+            log.info(
+                "connecting",
+                type=str(self.source_type),
+                host=self.spec.host,
+                database=self.spec.database,
+            )
             self._eng = create_engine(
                 url,
                 pool_pre_ping=True,
@@ -157,7 +161,11 @@ class SqlAlchemyConnector(Connector):
 
         sch = self.resolve_schema(schema) or "public"
         with self._conn() as conn:
-            rows = conn.execute(text(self.columns_query), {"schema": sch, "table": table}).mappings().all()
+            rows = (
+                conn.execute(text(self.columns_query), {"schema": sch, "table": table})
+                .mappings()
+                .all()
+            )
         return [
             ColumnInfo(
                 name=list(r.values())[0],
@@ -173,7 +181,9 @@ class SqlAlchemyConnector(Connector):
             return [c.name for c in cols if c.is_primary_key]
         sch = self.resolve_schema(schema) or "public"
         with self._conn() as conn:
-            rows = conn.execute(text(self.pks_query), {"schema": sch, "table": table}).mappings().all()
+            rows = (
+                conn.execute(text(self.pks_query), {"schema": sch, "table": table}).mappings().all()
+            )
         return [list(r.values())[0] for r in rows]
 
     # -- execution ---------------------------------------------------------- #
@@ -252,7 +262,10 @@ class SQLiteConnector(SqlAlchemyConnector):
     def _engine(self) -> Any:
         if self._eng is None:
             self._eng = create_engine(
-                self._url(), connect_args={"check_same_thread": False}, future=True, poolclass=NullPool
+                self._url(),
+                connect_args={"check_same_thread": False},
+                future=True,
+                poolclass=NullPool,
             )
         return self._eng
 

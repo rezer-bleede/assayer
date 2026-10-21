@@ -82,7 +82,9 @@ def list_connections(session_id: str | None = None) -> list[ConnectionSpec]:
         q = s.query(ConnectionRow)
         if session_id:
             q = q.filter(ConnectionRow.session_id == session_id)
-        return [ConnectionSpec.model_validate(r.payload) for r in q.order_by(ConnectionRow.created_at)]
+        return [
+            ConnectionSpec.model_validate(r.payload) for r in q.order_by(ConnectionRow.created_at)
+        ]
 
 
 # --------------------------------------------------------------------------- #

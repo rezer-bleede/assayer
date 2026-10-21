@@ -92,9 +92,7 @@ def bind_sources(
     #    which makes binding deterministic instead of name-fuzzy.
     for cid, spec in connections.items():
         options = getattr(spec, "options", None) or {}
-        declared = options.get("tables") or (
-            [options["table"]] if options.get("table") else []
-        )
+        declared = options.get("tables") or ([options["table"]] if options.get("table") else [])
         if not declared:
             continue
         for raw in declared:
@@ -199,7 +197,9 @@ def plan_checks(
         ref = _table_ref(b)
         prof = profile.get(f"{b.source_id}|{b.table}", {})
         cols = _columns(b)
-        col_prof = {c["name"]: c for c in prof.get("columns", []) if isinstance(c, dict) and "name" in c}
+        col_prof = {
+            c["name"]: c for c in prof.get("columns", []) if isinstance(c, dict) and "name" in c
+        }
 
         # --- 1. existence / shape -------------------------------------- #
         checks.append(
@@ -260,7 +260,7 @@ def plan_checks(
                     break
 
         # --- 3. join keys match across source/target -------------------- #
-        for edge in (analysis.lineage if analysis else []):
+        for edge in analysis.lineage if analysis else []:
             if _bare(edge.target) != b.table or _bare(edge.source) == b.table:
                 continue
             child_col, parent_col = _join_key(analysis, b.table, _bare(edge.source))
@@ -268,8 +268,7 @@ def plan_checks(
                 continue
             checks.append(
                 CheckSpec(
-                    name=f"[{b.table}.{child_col}] joins to '{edge.source}' on "
-                         f"{parent_col}",
+                    name=f"[{b.table}.{child_col}] joins to '{edge.source}' on {parent_col}",
                     kind=CheckKind.REFERENTIAL,
                     table=ref,
                     column=child_col,
@@ -372,7 +371,11 @@ def plan_checks(
                         tags=["validity"],
                     )
                 )
-            elif _STATUS_RE.search(c) and meta.get("distinct_values") and meta.get("distinct_values", 0) <= 20:
+            elif (
+                _STATUS_RE.search(c)
+                and meta.get("distinct_values")
+                and meta.get("distinct_values", 0) <= 20
+            ):
                 checks.append(
                     CheckSpec(
                         name=f"[{b.table}.{c}] cardinality is stable",
@@ -487,7 +490,9 @@ def plan_checks(
 _EQ_RE = re.compile(r"([\w.\"`]+)\s*=\s*([\w.\"`]+)")
 
 
-def _join_key(analysis: EtlAnalysis | None, target: str, source: str) -> tuple[str | None, str | None]:
+def _join_key(
+    analysis: EtlAnalysis | None, target: str, source: str
+) -> tuple[str | None, str | None]:
     """Recover the join columns from the ETL: `(child_col, parent_col)`.
 
     Handles `a.x = b.y`, `a.x = b.x` and `USING (x)`; returns (None, None) when
@@ -543,7 +548,9 @@ def summarize_analysis(analysis: EtlAnalysis | None) -> str:
         parts.append("transformations:")
         parts.extend(f"  - [{t.kind}] {t.description}" for t in analysis.transformations[:25])
     if analysis.lineage:
-        parts.append("lineage: " + ", ".join(f"{e.source} -> {e.target}" for e in analysis.lineage[:15]))
+        parts.append(
+            "lineage: " + ", ".join(f"{e.source} -> {e.target}" for e in analysis.lineage[:15])
+        )
     if analysis.risks:
         parts.append("risks: " + "; ".join(analysis.risks))
     return "\n".join(parts)

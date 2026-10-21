@@ -34,9 +34,25 @@ from app.schemas import DataProfile
 
 # directories that are never ETL source and routinely dwarf everything else
 SKIP_DIRS = {
-    ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "env",
-    "__pycache__", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache",
-    "dist", "build", ".idea", ".vscode", "site-packages", ".next", "logs",
+    ".git",
+    ".hg",
+    ".svn",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    "__pycache__",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "dist",
+    "build",
+    ".idea",
+    ".vscode",
+    "site-packages",
+    ".next",
+    "logs",
     ".ipynb_checkpoints",
 }
 
@@ -53,17 +69,33 @@ JSON_EXT = {".json"}
 
 # extensionless / unusual config files worth reading regardless of the above
 CONFIG_NAMES = {
-    "dbt_project.yml", "profiles.yml", "packages.yml", "selectors.yml",
+    "dbt_project.yml",
+    "profiles.yml",
+    "packages.yml",
+    "selectors.yml",
     "dbt_packages.yml",
 }
 
 # lock files and build artifacts: large, mechanical, zero lineage value. The
 # dbt `catalog.json` is on the list because it duplicates introspected schemas.
 JUNK_NAMES = {
-    "package-lock.json", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
-    "yarn.lock", "bun.lock", "bun.lockb", "poetry.lock", "pipfile.lock",
-    "uv.lock", "conda-lock.yml", "composer.lock", "gemfile.lock",
-    "catalog.json", "run_results.json", "semgrep.lock", ".ds_store",
+    "package-lock.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "poetry.lock",
+    "pipfile.lock",
+    "uv.lock",
+    "conda-lock.yml",
+    "composer.lock",
+    "gemfile.lock",
+    "catalog.json",
+    "run_results.json",
+    "semgrep.lock",
+    ".ds_store",
 }
 
 # dbt compiles models into target/; that SQL mirrors the models and would
@@ -72,9 +104,23 @@ _TARGET_KEEP = {"manifest.json"}
 
 # JSON documents shaped like these keys are configuration, not data exports
 _JSON_CONFIG_KEYS = {
-    "name", "version", "profile", "config", "models", "seeds", "sources",
-    "vars", "data_tests", "tests", "on-run-start", "on-run-end",
-    "on_run_start", "on_run_end", "type", "path", "path-paths",
+    "name",
+    "version",
+    "profile",
+    "config",
+    "models",
+    "seeds",
+    "sources",
+    "vars",
+    "data_tests",
+    "tests",
+    "on-run-start",
+    "on-run-end",
+    "on_run_start",
+    "on_run_end",
+    "type",
+    "path",
+    "path-paths",
 }
 # ...while these wrap a row payload, which makes the document a data export
 _JSON_DATA_KEYS = {"data", "rows", "records", "results", "items", "values", "features"}
@@ -88,9 +134,9 @@ _BIN_SNIFF_BYTES = 4096
 _CTRL_RE = re.compile(rb"[\x00-\x08\x0e-\x1f]")
 
 # content sniffs for text we were about to treat as code/config
-_MINIFY_LONG_LINE = 500      # chars
-_MINIFY_RATIO = 0.4          # share of lines longer than the above
-_DUMP_RUN_LINES = 300        # consecutive bulk-data lines
+_MINIFY_LONG_LINE = 500  # chars
+_MINIFY_RATIO = 0.4  # share of lines longer than the above
+_DUMP_RUN_LINES = 300  # consecutive bulk-data lines
 _BULK_LINE_RE = re.compile(r"^\s*(insert\s+into|values\s*\(|\(|--\s+insert)", re.I)
 _LONG_INT_RE = re.compile(r"^[+-]?\d{1,18}$")
 _FLOAT_RE = re.compile(r"^[+-]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?$")
@@ -100,22 +146,22 @@ class Kind(StrEnum):
     CODE = "code"
     CONFIG = "config"
     DATA = "data"
-    SNIFF = "sniff"   # generic .json: needs content to decide
+    SNIFF = "sniff"  # generic .json: needs content to decide
     SKIP = "skip"
 
 
 class Skip(StrEnum):
     KEEP = "keep"
-    DIR = "skip_dir"              # lives under .git / node_modules / …
-    TYPE = "skip_type"            # extension we never read
-    JUNK = "skip_junk"            # lock file / package manifest / build artifact
-    SIZE = "skip_size"            # above the per-file cap
+    DIR = "skip_dir"  # lives under .git / node_modules / …
+    TYPE = "skip_type"  # extension we never read
+    JUNK = "skip_junk"  # lock file / package manifest / build artifact
+    SIZE = "skip_size"  # above the per-file cap
     TOO_MANY = "skip_too_many"
     TARGET_NOISE = "skip_compiled"  # dbt target/ artifacts other than manifest
     BINARY = "skip_binary"
     GENERATED = "skip_generated"  # minified / machine-written
     DATA_DUMP = "skip_data_dump"  # bulk INSERT statements posing as SQL
-    TOTAL = "skip_total_cap"      # over the aggregate source budget
+    TOTAL = "skip_total_cap"  # over the aggregate source budget
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,10 +367,10 @@ def sniff_text(rel_path: str, text: str) -> Verdict:
 class Intake:
     """The outcome of routing a pile of files."""
 
-    contents: dict[str, str] = field(default_factory=dict)   # code/config, parsed
-    manifest: dict[str, Any] | None = None                    # dbt manifest
+    contents: dict[str, str] = field(default_factory=dict)  # code/config, parsed
+    manifest: dict[str, Any] | None = None  # dbt manifest
     profiles: list[DataProfile] = field(default_factory=list)  # profiled data files
-    notes: list[str] = field(default_factory=list)            # what we ignored, and why
+    notes: list[str] = field(default_factory=list)  # what we ignored, and why
 
     @property
     def blob(self) -> str:
@@ -393,11 +439,7 @@ def assemble_sources(
                 # a generic .json is source only if it is small and really
                 # looks like configuration; otherwise it is a data export
                 body = raw.decode("utf-8", errors="replace")
-                decision = (
-                    Kind.DATA
-                    if len(body) > JSON_CONFIG_MAX_BYTES
-                    else sniff_json(body)
-                )
+                decision = Kind.DATA if len(body) > JSON_CONFIG_MAX_BYTES else sniff_json(body)
                 if decision is Kind.SKIP:
                     note(str(Skip.TYPE))
                     continue

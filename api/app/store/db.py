@@ -150,9 +150,7 @@ def _widen_composite_pk(eng) -> None:
     """
     try:
         with eng.begin() as conn:
-            conn.execute(
-                text("ALTER TABLE check_results ALTER COLUMN id TYPE VARCHAR(128)")
-            )
+            conn.execute(text("ALTER TABLE check_results ALTER COLUMN id TYPE VARCHAR(128)"))
     except Exception as exc:  # noqa: BLE001 - column already wide, or table absent
         log.debug("check_results id width unchanged", error=str(exc))
 

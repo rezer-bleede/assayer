@@ -51,7 +51,9 @@ class BigQueryConnector(Connector):
 
     def primary_keys(self, schema: str | None, table: str) -> list[str]:
         tbl = self._bq().get_table(f"{self.resolve_schema(schema)}.{table}")
-        return [f.name for f in tbl.schema if f.field_type == "RECORD" and f.mode == "REQUIRED"] or []
+        return [
+            f.name for f in tbl.schema if f.field_type == "RECORD" and f.mode == "REQUIRED"
+        ] or []
 
     def query(self, sql: str, params: dict[str, Any] | None = None) -> QueryResult:
         start = time.perf_counter()

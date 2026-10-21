@@ -19,14 +19,33 @@ class UnsafeSQLError(ValueError):
 # failed late with a cryptic error. Public so the plan builder can drop
 # such checks before they ever reach a POST /runs call.
 NEEDS_COLUMN = (
-    "null_rate", "unique", "duplicate", "referential", "freshness",
-    "min_max", "range", "pattern", "distribution",
+    "null_rate",
+    "unique",
+    "duplicate",
+    "referential",
+    "freshness",
+    "min_max",
+    "range",
+    "pattern",
+    "distribution",
 )
 
 
 _FORBIDDEN = (
-    "insert", "update", "delete", "drop", "truncate", "alter", "create",
-    "grant", "revoke", "merge", "replace", "attach", "copy", "vacuum",
+    "insert",
+    "update",
+    "delete",
+    "drop",
+    "truncate",
+    "alter",
+    "create",
+    "grant",
+    "revoke",
+    "merge",
+    "replace",
+    "attach",
+    "copy",
+    "vacuum",
 )
 
 
@@ -64,22 +83,19 @@ def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
     kind = str(check.kind)
 
     if col is None and kind in NEEDS_COLUMN:
-        raise UnsafeSQLError(f'a {kind} check must name a column')
+        raise UnsafeSQLError(f"a {kind} check must name a column")
 
     match kind:
         case "null_rate":
             sql = (
                 f"SELECT COUNT(*) AS total, "
-                f'SUM(CASE WHEN {col} IS NULL THEN 1 ELSE 0 END) AS nulls '
+                f"SUM(CASE WHEN {col} IS NULL THEN 1 ELSE 0 END) AS nulls "
                 f"FROM {t}"
             )
             return sql, {}
 
         case "unique":
-            sql = (
-                f"SELECT COUNT(*) AS total, COUNT(DISTINCT {col}) AS distinct_values "
-                f"FROM {t}"
-            )
+            sql = f"SELECT COUNT(*) AS total, COUNT(DISTINCT {col}) AS distinct_values FROM {t}"
             return sql, {}
 
         case "duplicate":
@@ -100,21 +116,18 @@ def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
             pt = f'"{parent_schema}"."{parent_table}"' if parent_schema else f'"{parent_table}"'
             sql = (
                 f"SELECT COUNT(*) AS total, "
-                f"SUM(CASE WHEN p.\"{parent_col}\" IS NULL THEN 1 ELSE 0 END) AS orphans "
-                f"FROM {t} c LEFT JOIN {pt} p ON c.{col} = p.\"{parent_col}\""
+                f'SUM(CASE WHEN p."{parent_col}" IS NULL THEN 1 ELSE 0 END) AS orphans '
+                f'FROM {t} c LEFT JOIN {pt} p ON c.{col} = p."{parent_col}"'
             )
             return sql, {}
 
         case "freshness":
-            sql = (
-                f"SELECT COUNT(*) AS total, MAX({col}) AS latest, "
-                f"MIN({col}) AS earliest FROM {t}"
-            )
+            sql = f"SELECT COUNT(*) AS total, MAX({col}) AS latest, MIN({col}) AS earliest FROM {t}"
             return sql, {}
 
         case "min_max":
             col2 = check.column
-            sql = f"SELECT MIN(\"{col2}\") AS min_value, MAX(\"{col2}\") AS max_value FROM {t}"
+            sql = f'SELECT MIN("{col2}") AS min_value, MAX("{col2}") AS max_value FROM {t}'
             return sql, {}
 
         case "range":
@@ -149,9 +162,9 @@ def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
         case "distribution":
             col2 = check.column
             sql = (
-                f"SELECT COUNT(*) AS total, COUNT(\"{col2}\") AS non_null, "
-                f"COUNT(DISTINCT \"{col2}\") AS distinct_values, "
-                f"MIN(\"{col2}\") AS min_value, MAX(\"{col2}\") AS max_value FROM {t}"
+                f'SELECT COUNT(*) AS total, COUNT("{col2}") AS non_null, '
+                f'COUNT(DISTINCT "{col2}") AS distinct_values, '
+                f'MIN("{col2}") AS min_value, MAX("{col2}") AS max_value FROM {t}'
             )
             return sql, {}
 
@@ -173,7 +186,7 @@ def sample_failure_sql(check: CheckSpec, conn: Connector) -> str:
     kind = str(check.kind)
     match kind:
         case "null_rate":
-            return f"SELECT * FROM {t} WHERE \"{col}\" IS NULL"
+            return f'SELECT * FROM {t} WHERE "{col}" IS NULL'
         case "unique" | "duplicate":
             keys = check.params.get("keys") or ([col] if col else [])
             grp = ", ".join(f'"{k}"' for k in keys)
@@ -187,7 +200,7 @@ def sample_failure_sql(check: CheckSpec, conn: Connector) -> str:
             p_col = check.params.get("parent_column", col)
             pt = f'"{p_schema}"."{p_table}"' if p_schema else f'"{p_table}"'
             return (
-                f"SELECT c.* FROM {t} c LEFT JOIN {pt} p ON c.\"{col}\" = p.\"{p_col}\" "
+                f'SELECT c.* FROM {t} c LEFT JOIN {pt} p ON c."{col}" = p."{p_col}" '
                 f'WHERE p."{p_col}" IS NULL'
             )
         case "range":
@@ -201,7 +214,7 @@ def sample_failure_sql(check: CheckSpec, conn: Connector) -> str:
             mismatch = conn.regex_mismatch(f'"{col}"', check.regex or "")
             return f"SELECT * FROM {t} WHERE {mismatch}"
         case "freshness":
-            return f"SELECT * FROM {t} ORDER BY \"{col or '_ingest_ts'}\" DESC"
+            return f'SELECT * FROM {t} ORDER BY "{col or "_ingest_ts"}" DESC'
     return f"SELECT * FROM {t}"
 
 

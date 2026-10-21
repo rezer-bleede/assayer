@@ -60,9 +60,7 @@ class ClickHouseConnector(Connector):
                     host=self.spec.host,
                     port=port,
                     username=self.spec.username or "default",
-                    password=self.spec.password.get_secret_value()
-                    if self.spec.password
-                    else "",
+                    password=self.spec.password.get_secret_value() if self.spec.password else "",
                     database=self.spec.database,
                     secure=secure,
                     settings={"readonly": int(options.get("readonly", 2))},
@@ -73,9 +71,7 @@ class ClickHouseConnector(Connector):
                     port = int(port) if port is not None else None
                 except (TypeError, ValueError):
                     port = None
-                if port in _NATIVE_TCP_PORTS or (
-                    port is not None and 9000 <= port <= 9099
-                ):
+                if port in _NATIVE_TCP_PORTS or (port is not None and 9000 <= port <= 9099):
                     msg += (
                         f" — port {port} looks like the ClickHouse native TCP interface, "
                         f"which does not speak HTTP; use the HTTP port (default 8123, "
@@ -143,8 +139,7 @@ class ClickHouseConnector(Connector):
                 name=str(r["name"]),
                 # Nullable(String) is a wrapper, not a type — report the type
                 data_type=str(r["type"]).removeprefix("Nullable(").removesuffix(")"),
-                nullable=bool(int(r["is_nullable"]))
-                or str(r["type"]).startswith("Nullable"),
+                nullable=bool(int(r["is_nullable"])) or str(r["type"]).startswith("Nullable"),
             )
             for r in self._rows(sql)
         ]

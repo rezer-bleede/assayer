@@ -44,7 +44,9 @@ class FakeConnector(Connector):
         self.executed.append(sql)
         low = sql.lower()
         rows = self._respond(low, sql)
-        return QueryResult(columns=list(rows[0].keys()) if rows else [], rows=rows, rowcount=len(rows))
+        return QueryResult(
+            columns=list(rows[0].keys()) if rows else [], rows=rows, rowcount=len(rows)
+        )
 
     def _respond(self, low: str, sql: str) -> list[dict]:
         table = "orders" if "orders" in low else "events"
@@ -103,10 +105,32 @@ async def test_runner_scores_and_flags_failures(monkeypatch) -> None:
 
     plan = TestPlan(
         checks=[
-            CheckSpec(name="table readable", kind=CheckKind.ROW_COUNT, table=TableRef(source_id="c1", schema="main", name="orders")),
-            CheckSpec(name="email not null", kind=CheckKind.NULL_RATE, table=TableRef(source_id="c1", schema="main", name="orders"), column="email", threshold=0.0),
-            CheckSpec(name="id unique", kind=CheckKind.UNIQUE, table=TableRef(source_id="c1", schema="main", name="orders"), column="id"),
-            CheckSpec(name="amount non-negative", kind=CheckKind.RANGE, table=TableRef(source_id="c1", schema="main", name="orders"), column="amount", min_value=0, max_value=None),
+            CheckSpec(
+                name="table readable",
+                kind=CheckKind.ROW_COUNT,
+                table=TableRef(source_id="c1", schema="main", name="orders"),
+            ),
+            CheckSpec(
+                name="email not null",
+                kind=CheckKind.NULL_RATE,
+                table=TableRef(source_id="c1", schema="main", name="orders"),
+                column="email",
+                threshold=0.0,
+            ),
+            CheckSpec(
+                name="id unique",
+                kind=CheckKind.UNIQUE,
+                table=TableRef(source_id="c1", schema="main", name="orders"),
+                column="id",
+            ),
+            CheckSpec(
+                name="amount non-negative",
+                kind=CheckKind.RANGE,
+                table=TableRef(source_id="c1", schema="main", name="orders"),
+                column="amount",
+                min_value=0,
+                max_value=None,
+            ),
         ]
     )
 

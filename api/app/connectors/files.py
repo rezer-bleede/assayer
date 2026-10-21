@@ -91,7 +91,10 @@ class _FileConnectorBase(Connector):
     def describe_table(self, schema: str | None, table: str) -> list[ColumnInfo]:
         rows = self.query(f'DESCRIBE "{table}"').rows
         if not rows:
-            return [ColumnInfo(name=c, data_type="unknown") for c in self.query(f'SELECT * FROM "{table}" LIMIT 0').columns]
+            return [
+                ColumnInfo(name=c, data_type="unknown")
+                for c in self.query(f'SELECT * FROM "{table}" LIMIT 0').columns
+            ]
         return [
             ColumnInfo(
                 name=r.get("column_name") or r.get("Column_Name") or r.get("column"),

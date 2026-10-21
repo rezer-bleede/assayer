@@ -77,9 +77,7 @@ async def from_repo(req: RepoRequest) -> AnalyzeResponse:
         raise HTTPException(400, "Repository intake is disabled (REPO_ENABLED=false).")
 
     try:
-        content = await asyncio.to_thread(
-            fetch, req.url, req.ref, req.token, req.username
-        )
+        content = await asyncio.to_thread(fetch, req.url, req.ref, req.token, req.username)
     except RepoError as exc:
         # RepoError messages are already scrubbed of credentials
         raise HTTPException(422, str(exc)) from exc
@@ -157,8 +155,13 @@ async def upload(
     # Reject a runaway single file *before* reading it. `UploadFile` spools
     # large parts to disk, but `await f.read()` still pulls the whole thing
     # into memory, and the caps below would only drop it afterwards.
-    oversize = [(rel, f.size) for i, f in enumerate(files) if f.size
-                for rel in [_rel(i, f)] if f.size > MAX_UPLOAD_FILE_BYTES]
+    oversize = [
+        (rel, f.size)
+        for i, f in enumerate(files)
+        if f.size
+        for rel in [_rel(i, f)]
+        if f.size > MAX_UPLOAD_FILE_BYTES
+    ]
     if oversize:
         name, size = oversize[0]
         raise HTTPException(

@@ -110,7 +110,9 @@ def test_jsonl_profiled_line_by_line() -> None:
 
 def test_json_keys_that_need_sanitising_keep_their_values() -> None:
     """`user id` is reported as `user_id`, and the values must follow it."""
-    raw = json.dumps([{"user id": 1, "\ufeffname": "a"}, {"user id": 2, "\ufeffname": "b"}]).encode()
+    raw = json.dumps(
+        [{"user id": 1, "\ufeffname": "a"}, {"user id": 2, "\ufeffname": "b"}]
+    ).encode()
     profile = profile_file("export/x.json", raw)
     assert profile is not None
     cols = {c.name: c for c in profile.columns}

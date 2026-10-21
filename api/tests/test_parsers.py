@@ -101,7 +101,11 @@ def test_dbt_manifest_lineage() -> None:
             },
         },
         "sources": {
-            "source.proj.raw.orders": {"source_name": "raw", "name": "orders", "identifier": "orders"}
+            "source.proj.raw.orders": {
+                "source_name": "raw",
+                "name": "orders",
+                "identifier": "orders",
+            }
         },
         "seeds": {},
     }
@@ -110,6 +114,7 @@ def test_dbt_manifest_lineage() -> None:
     assert any(t.kind == "dbt_test" for t in a.transformations)
     assert any(e.target == "stg_orders" and e.source == "raw.orders" for e in a.lineage)
     assert any("Incremental" in r for r in a.risks)
+
 
 # --- python lineage depth ------------------------------------------------ #
 

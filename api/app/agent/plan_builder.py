@@ -87,7 +87,9 @@ def _coerce(raw: dict, bindings: list[SourceBinding]) -> CheckSpec | None:
             parent_col = str(params.get("parent_column") or "").strip()
             parent_known = _known_columns(parent_binding)
             if parent_col and parent_known and parent_col.lower() not in parent_known:
-                log.debug("dropping llm check: unknown parent_column", parent=parent, column=parent_col)
+                log.debug(
+                    "dropping llm check: unknown parent_column", parent=parent, column=parent_col
+                )
                 return None
 
         return CheckSpec(
@@ -106,9 +108,20 @@ def _coerce(raw: dict, bindings: list[SourceBinding]) -> CheckSpec | None:
             tolerance_ratio=_num(raw.get("tolerance_ratio")) or 0.0,
             regex=raw.get("regex"),
             sql=raw.get("sql") if kind == "custom_sql" else None,
-            params={k: v for k, v in params.items() if k in
-                    {"parent_table", "parent_column", "parent_schema", "sla_hours",
-                     "expected_row_count", "keys", "expected_columns"}},
+            params={
+                k: v
+                for k, v in params.items()
+                if k
+                in {
+                    "parent_table",
+                    "parent_column",
+                    "parent_schema",
+                    "sla_hours",
+                    "expected_row_count",
+                    "keys",
+                    "expected_columns",
+                }
+            },
             rationale=str(raw.get("rationale") or "")[:400],
             tags=["llm"],
         )
@@ -163,8 +176,11 @@ async def build_plan(
         plan = TestPlan(
             summary=(
                 f"{len(base)} checks derived from "
-                + (f"the {analysis.language} ETL parse and live source schemas"
-                   if analysis else "live source schemas")
+                + (
+                    f"the {analysis.language} ETL parse and live source schemas"
+                    if analysis
+                    else "live source schemas"
+                )
             ),
             checks=base,
         )
@@ -175,9 +191,7 @@ async def build_plan(
         for b in bindings
     ]
     try:
-        raw = await _ask_llm(
-            plan_prompt(summarize_analysis(analysis), src_block, user_intent)
-        )
+        raw = await _ask_llm(plan_prompt(summarize_analysis(analysis), src_block, user_intent))
         parsed = _extract_json(raw)
         proposed = parsed.get("checks", []) if isinstance(parsed.get("checks", []), list) else []
         llm_checks = [c for c in (_coerce(r, bindings) for r in proposed) if c]
@@ -197,7 +211,9 @@ async def build_plan(
         accepted=len(llm_checks),
         merged=len(merged),
     )
-    return TestPlan(summary=f"{summary} ({len(base)} baseline + {len(llm_checks)} agent checks)", checks=merged)
+    return TestPlan(
+        summary=f"{summary} ({len(base)} baseline + {len(llm_checks)} agent checks)", checks=merged
+    )
 
 
 def _merge(base: list[CheckSpec], extra: list[CheckSpec]) -> list[CheckSpec]:

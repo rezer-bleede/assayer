@@ -185,7 +185,6 @@ def test_derive_requirements_dbt_hints() -> None:
     assert reqs[0].confidence == 0.9
 
 
-
 def test_derive_requirements_empty() -> None:
     analysis = _analysis()
     assert derive_requirements(analysis) == []
