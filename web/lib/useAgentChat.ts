@@ -18,7 +18,10 @@ export type AgentEvent =
   | { type: 'session.ready'; session_id: string; stage?: string }
   | { type: 'history'; messages?: ChatMessage[] }
   | { type: 'message'; id: string; role: string; content: string; created_at: string }
+  | { type: 'message.start'; id: string; role: string }
+  | { type: 'message.delta'; id: string; text: string }
   | { type: 'thinking'; started_at: number }
+  | { type: 'thought'; text: string }
   | { type: 'stage'; stage: string }
   | { type: 'agent.question'; question?: Question } & Record<string, unknown>
   | { type: 'connection.detected'; connection_id: string; requirement_key?: string | null }
@@ -72,6 +75,10 @@ export function useAgentChat() {
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
+  /** the assistant message currently streaming in — finalized by its `message` frame */
+  const [stream, setStream] = useState<{ id: string; content: string } | null>(null);
+  /** latest agent status line ("Profiling orders…", "Drafting the plan…") */
+  const [thought, setThought] = useState<string | null>(null);
 
   const connect = useCallback((sid: string) => {
     wsRef.current?.close();
@@ -104,20 +111,47 @@ export function useAgentChat() {
         case 'history':
           // guarded: a malformed frame must not blank the transcript
           setMessages(Array.isArray(ev.messages) ? ev.messages : []);
+          setStream(null);
+          setThought(null);
           break;
-        case 'message':
-          setMessages((m) => [
-            ...m,
-            {
-              id: ev.id,
-              role: ev.role as ChatMessage['role'],
-              content: ev.content,
-              created_at: ev.created_at,
-            },
-          ]);
+        case 'message': {
+          const m: ChatMessage = {
+            id: ev.id,
+            role: ev.role as ChatMessage['role'],
+            content: ev.content,
+            created_at: ev.created_at,
+            attachments: [],
+          };
+          setMessages((prev) => {
+            // a frame matching an in-flight stream finalizes it in place;
+            // unknown ids append as before (replayed history, older servers)
+            const idx = prev.findIndex((x) => x.id === m.id);
+            if (idx < 0) return [...prev, m];
+            const next = [...prev];
+            next[idx] = m;
+            return next;
+          });
+          setStream((s) => (s && s.id === m.id ? null : s));
+          setThought(null);
+          break;
+        }
+        case 'message.start':
+          setStream({ id: ev.id, content: '' });
+          setThought(null);
+          break;
+        case 'message.delta':
+          // deltas arrive batched (the server pumps every 50ms), so frequent
+          // state updates here are already coalesced upstream
+          setStream((s) =>
+            s && s.id === ev.id ? { id: s.id, content: s.content + (ev.text ?? '') } : s,
+          );
           break;
         case 'thinking':
           setPending(true);
+          setThought(null);
+          break;
+        case 'thought':
+          setThought(ev.text || null);
           break;
         case 'stage':
           setStage(ev.stage);
@@ -185,9 +219,13 @@ export function useAgentChat() {
         case 'error':
           setError(ev.message);
           setPending(false);
+          setStream(null);
+          setThought(null);
           break;
         case 'done':
           setPending(false);
+          setStream(null);
+          setThought(null);
           if (ev.stage) setStage(ev.stage);
           break;
       }
@@ -246,6 +284,8 @@ export function useAgentChat() {
     sessionId,
     messages,
     pending,
+    stream,
+    thought,
     plan,
     planRunId,
     progress,

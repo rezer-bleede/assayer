@@ -46,6 +46,7 @@ from app.schemas import (
     SourceRequirement,
     StreamEvent,
     TestPlan,
+    new_id,
 )
 from app.services.connection_repair import (
     RepairReport,
@@ -107,8 +108,6 @@ class CreateSessionRequest(BaseModel):
 
 @router.post("/api/sessions")
 def create_session(req: CreateSessionRequest) -> dict[str, Any]:
-    from app.schemas import new_id
-
     sid = req.session_id or new_id()
     repo.ensure_session(sid)
     return {
@@ -270,6 +269,30 @@ class TurnOutcome:
         self.question: Question | None = None
         self.plan: TestPlan | None = None
         self.awaiting_approval: bool = False
+        # set when part of the reply was streamed mid-turn; the ws layer then
+        # reuses the same id for the final persisted message so the client can
+        # replace its streaming bubble instead of appending a duplicate
+        self.streamed_id: str | None = None
+
+
+class _StreamedReply:
+    """Emit `message.start`/`message.delta` frames through the event buffer.
+
+    The LLM reports prose through this sink: the first delta opens the frame,
+    everything after appends. Emits stay synchronous (`EventBuffer` backs
+    them), so they can be passed straight into `astream`/`run_audit`.
+    """
+
+    def __init__(self, emit: Any) -> None:
+        self._emit = emit
+        self.id = new_id()
+        self.opened = False
+
+    def __call__(self, text: str) -> None:
+        if not self.opened:
+            self.opened = True
+            self._emit("message.start", {"id": self.id, "role": str(ChatRole.ASSISTANT)})
+        self._emit("message.delta", {"id": self.id, "text": text})
 
 
 async def _absorb_pasted_code(text: str, session_id: str, emit: Any) -> tuple[str | None, str]:
@@ -392,7 +415,7 @@ async def handle_turn(
     if action == "approve" or (text.strip().lower() in AFFIRMATIVE and ctx.get("pending_plan")):
         executed = await _execute(ctx, session_id, emit)
         if executed is not None:
-            out.reply, out.stage, out.awaiting_approval = executed
+            out.reply, out.stage, out.awaiting_approval, out.streamed_id = executed
             _persist(session_id, ctx)
             return out
         out.reply = (
@@ -451,8 +474,7 @@ def _first_line(notes: list[str]) -> str:
 
 def _accepts_pending_connection(ctx: dict, action: str | None, text: str) -> bool:
     return bool(ctx.get("pending_connection")) and (
-        action == "accept_connection"
-        or (not action and text.strip().lower() in ACCEPT_CONNECTION)
+        action == "accept_connection" or (not action and text.strip().lower() in ACCEPT_CONNECTION)
     )
 
 
@@ -545,7 +567,10 @@ async def _plan(
     introspected = introspect_all(specs, emit=emit)
     bindings = build_bindings(analysis, specs, introspected)
     missing = find_unresolved(analysis, bindings)
-    profiles = profile_focus(specs, introspected, [(b.schema, b.table) for b in bindings])
+    profiles = profile_focus(
+        specs, introspected, [(b.schema, b.table) for b in bindings], emit=emit
+    )
+    emit("thought", {"text": "Drafting the quality plan…"})
     plan = await build_plan(analysis, bindings, user_intent=user_intent[:300], profiles=profiles)
 
     if not plan.checks:
@@ -604,13 +629,16 @@ async def _plan(
         )
     return (
         f"I profiled {len(specs)} source(s) and drafted **{len(plan.checks)} checks**. "
-        f"Strategy: {plan.summary}\n\nTop checks:\n" + "\n".join(top)
+        f"Strategy: {plan.summary}\n\nTop checks:\n"
+        + "\n".join(top)
         + caveat
         + "\n\nApprove to run them, or tell me what to add or drop."
     )
 
 
-async def _execute(ctx: dict, session_id: str, emit: Any) -> tuple[str, str, bool] | None:
+async def _execute(
+    ctx: dict, session_id: str, emit: Any
+) -> tuple[str, str, bool, str | None] | None:
     plan = repo.get_plan(ctx.get("pending_plan") or "")
     if plan is None:
         return None
@@ -625,12 +653,21 @@ async def _execute(ctx: dict, session_id: str, emit: Any) -> tuple[str, str, boo
             "I still need a connection before I can run anything.",
             str(ConversationStage.NEED_SOURCES),
             False,
+            None,
         )
 
+    stream = _StreamedReply(emit)
     emit("run.starting", {"run_id": plan.run_id})
+    emit("thought", {"text": f"Running {len(plan.checks)} checks against live data…"})
     analysis = repo.get_etl(ctx.get("etl_id") or "")
     result = await run_audit(
-        plan.run_id, plan, specs, analysis=analysis, session_id=session_id, emit=emit
+        plan.run_id,
+        plan,
+        specs,
+        analysis=analysis,
+        session_id=session_id,
+        emit=emit,
+        on_delta=stream,
     )
     ctx["last_run_id"] = result.id
     ctx["pending_plan"] = None
@@ -643,7 +680,7 @@ async def _execute(ctx: dict, session_id: str, emit: Any) -> tuple[str, str, boo
         f"({result.score.passed} passed, {result.score.failed} failed, "
         f"{result.score.errored} errored).\n\n{result.narrative or ''}"
     )
-    return reply, str(ConversationStage.DONE), False
+    return reply, str(ConversationStage.DONE), False, stream.id if stream.opened else None
 
 
 def _is_affirmative(text: str) -> bool:
@@ -722,6 +759,10 @@ async def ws_chat(ws: WebSocket) -> None:
             await send("stage", {"stage": outcome.stage})
 
             reply = ChatMessage(role=ChatRole.ASSISTANT, content=outcome.reply)
+            if outcome.streamed_id:
+                # same id the client watched stream in: the final frame replaces
+                # its bubble instead of appending a duplicate
+                reply = reply.model_copy(update={"id": outcome.streamed_id})
             repo.append_message(session_id, reply)
             await send("message", reply.model_dump(mode="json"))
             await send("done", {"stage": outcome.stage})

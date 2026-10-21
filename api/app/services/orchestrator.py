@@ -30,6 +30,9 @@ def introspect_all(
 ) -> dict[str, list[dict]]:
     introspected: dict[str, list[dict]] = {}
     for cid, spec in connections.items():
+        if emit:
+            where = spec.host or spec.name
+            emit("thought", {"text": f"Connecting to {where}…"})
         data = introspect_source(spec, max_tables=max_tables)
         if not data.get("ok"):
             if emit:
@@ -40,6 +43,10 @@ def introspect_all(
             emit(
                 "source.introspected",
                 {"source_id": cid, "name": spec.name, "tables": len(introspected[cid])},
+            )
+            emit(
+                "thought",
+                {"text": f"Read {spec.name} — {len(introspected[cid])} tables found."},
             )
     return introspected
 
@@ -67,6 +74,9 @@ def profile_focus(
         for t in picked:
             if "error" in t or not t.get("name"):
                 continue
+            fqn = ".".join(x for x in (t.get("schema"), t.get("name")) if x)
+            if emit:
+                emit("thought", {"text": f"Profiling {fqn}…"})
             p = profile_table(spec, t.get("schema"), t.get("name"))
             if p.get("ok"):
                 profiles[f"{cid}|{t['name']}"] = p
@@ -98,8 +108,13 @@ async def run_audit(
     analysis: EtlAnalysis | None = None,
     session_id: str | None = None,
     emit: Emit | None = None,
+    on_delta: Callable[[str], None] | None = None,
 ) -> RunResult:
-    """Execute the approved plan, score it, and write the narrative."""
+    """Execute the approved plan, score it, and write the narrative.
+
+    `on_delta`, when given, receives report-narrative tokens as they stream
+    from the LLM, so the chat can show prose while it is still being written.
+    """
     plan.run_id = run_id
     pending = RunResult(id=run_id, status=RunStatus.RUNNING, plan=plan, analysis=analysis)
     repo.save_run(pending, session_id)
@@ -110,7 +125,9 @@ async def run_audit(
 
     result = await execute_plan(run_id, plan, connections, progress=progress)
     result.analysis = analysis
-    result.narrative = await build_report(result, analysis)
+    if emit:
+        emit("thought", {"text": "All checks done — writing the report…"})
+    result.narrative = await build_report(result, analysis, on_delta=on_delta)
 
     try:
         repo.save_run(result, session_id)
@@ -124,8 +141,9 @@ async def run_audit(
         )
         result.narrative = (result.narrative or "") + note
 
-    log.info("audit complete", run_id=run_id, score=result.score.overall,
-             failed=result.score.failed)
+    log.info(
+        "audit complete", run_id=run_id, score=result.score.overall, failed=result.score.failed
+    )
     return result
 
 

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from app.agent.prompts import report_prompt
-from app.core.llm import ainvoke, llm_available
+from app.core.llm import astream, llm_available
 from app.core.logging import log
 from app.schemas import CheckStatus, EtlAnalysis, RunResult
 
@@ -68,7 +70,9 @@ def _tie_to_etl(run: RunResult, analysis: EtlAnalysis | None) -> list[str]:
     if analysis is None:
         return []
     hints: list[str] = []
-    failed_tables = {r.table.fqn.split(".")[-1].lower() for r in run.results if r.status == CheckStatus.FAILED}
+    failed_tables = {
+        r.table.fqn.split(".")[-1].lower() for r in run.results if r.status == CheckStatus.FAILED
+    }
     for t in analysis.transformations:
         target = (t.target or "").split(":")[-1].split(".")[-1].lower()
         if target in failed_tables:
@@ -76,7 +80,11 @@ def _tie_to_etl(run: RunResult, analysis: EtlAnalysis | None) -> list[str]:
     return hints[:10]
 
 
-async def build_report(run: RunResult, analysis: EtlAnalysis | None = None) -> str:
+async def build_report(
+    run: RunResult,
+    analysis: EtlAnalysis | None = None,
+    on_delta: Callable[[str], None] | None = None,
+) -> str:
     summary = structured_summary(run)
     if not llm_available():
         return _fallback_narrary(run)
@@ -88,7 +96,9 @@ async def build_report(run: RunResult, analysis: EtlAnalysis | None = None) -> s
     }
     try:
         # the narrative is a page of prose, not a saga — bound it
-        return await ainvoke(report_prompt(payload, summary["failures"]), max_tokens=800)
+        return await astream(
+            report_prompt(payload, summary["failures"]), max_tokens=800, on_delta=on_delta
+        )
     except Exception as exc:  # noqa: BLE001
         log.warning("llm report failed, using fallback", error=str(exc))
         return _fallback_narrary(run)

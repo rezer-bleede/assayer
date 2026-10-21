@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from app.core.config import settings
@@ -36,6 +37,42 @@ def build_llm(temperature: float | None = None, model: str | None = None) -> Any
     return ChatOpenAI(**kwargs)
 
 
+def _content_text(content: Any) -> str:
+    """Normalize a message/chunk payload to plain text."""
+    if isinstance(content, list):  # some providers return content blocks
+        content = "\n".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+    return content or ""
+
+
+async def astream(
+    prompt: Any,
+    max_tokens: int | None = None,
+    on_delta: Callable[[str], None] | None = None,
+    **kwargs: Any,
+) -> str:
+    """Stream the configured chat model, returning the full text.
+
+    Behaves exactly like `ainvoke`, but each chunk also passes through the
+    synchronous `on_delta` callback as it arrives — WS emitters use it to
+    stream tokens into the chat while generation is still running.
+    """
+    model = build_llm()
+    if max_tokens:
+        model = model.bind(max_tokens=max_tokens)
+    parts: list[str] = []
+    async for chunk in model.astream(prompt, **kwargs):
+        text = _content_text(getattr(chunk, "content", chunk))
+        if not text:
+            continue
+        parts.append(text)
+        if on_delta:
+            try:
+                on_delta(text)
+            except Exception:  # noqa: BLE001
+                log.exception("llm delta callback failed")
+    return "".join(parts).strip()
+
+
 async def ainvoke(prompt: Any, max_tokens: int | None = None, **kwargs: Any) -> str:
     """Invoke the configured chat model and return plain text.
 
@@ -43,13 +80,4 @@ async def ainvoke(prompt: Any, max_tokens: int | None = None, **kwargs: Any) -> 
     local model can fall into a loop and emit thousands of tokens, which the
     deadline then aborts — wasted time either way.
     """
-    model = build_llm()
-    if max_tokens:
-        model = model.bind(max_tokens=max_tokens)
-    resp = await model.ainvoke(prompt, **kwargs)
-    content = getattr(resp, "content", resp)
-    if isinstance(content, list):  # some providers return content blocks
-        content = "\n".join(
-            b.get("text", "") if isinstance(b, dict) else str(b) for b in content
-        )
-    return (content or "").strip()
+    return await astream(prompt, max_tokens=max_tokens, **kwargs)

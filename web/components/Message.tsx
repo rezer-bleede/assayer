@@ -85,7 +85,13 @@ function Markdown({ text }: { text: string }) {
   }
 }
 
-export function MessageBubble({ message }: { message: ChatMessage }) {
+export function MessageBubble({
+  message,
+  streaming,
+}: {
+  message: ChatMessage;
+  streaming?: boolean;
+}) {
   const isUser = message.role === 'user';
   return (
     <div className={cn('flex w-full animate-fade-up', isUser ? 'justify-end' : 'justify-start')}>
@@ -97,23 +103,41 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
             : 'surface rounded-bl-sm text-fg',
         )}
       >
-        {isUser ? message.content : <Markdown text={message.content} />}
+        {isUser ? (
+          message.content
+        ) : (
+          <>
+            <Markdown text={message.content} />
+            {streaming && (
+              <span
+                aria-hidden
+                className="ml-0.5 inline-block h-3.5 w-[6px] animate-pulse rounded-[1px] bg-accent align-middle"
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-export function TypingIndicator() {
+/** Pending-agent bubble: bouncing dots plus the agent's live status line. */
+export function ThinkingStatus({ thought }: { thought?: string | null }) {
   return (
-    <div className="flex justify-start">
-      <div className="surface flex items-center gap-1.5 rounded-2xl rounded-bl-sm px-4 py-3">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted/70"
-            style={{ animationDelay: `${i * 140}ms`, animationDuration: '900ms' }}
-          />
-        ))}
+    <div className="flex justify-start" aria-live="polite" aria-label="Agent working">
+      <div className="surface flex items-center gap-2.5 rounded-2xl rounded-bl-sm px-4 py-3">
+        <span className="flex items-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted/70"
+              style={{ animationDelay: `${i * 140}ms`, animationDuration: '900ms' }}
+            />
+          ))}
+        </span>
+        <span className="min-w-0 truncate text-[12px] text-muted">
+          <span className="animate-pulse">{thought ?? 'Thinking…'}</span>
+        </span>
       </div>
     </div>
   );

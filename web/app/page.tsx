@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Composer } from '@/components/Composer';
-import { MessageBubble, TypingIndicator, useAutoScroll } from '@/components/Message';
+import { MessageBubble, ThinkingStatus, useAutoScroll } from '@/components/Message';
 import { PlanCard } from '@/components/PlanCard';
 import { QuestionCard, type QuestionStatus } from '@/components/QuestionCard';
 import { ResultsCard } from '@/components/ResultsCard';
@@ -43,6 +43,8 @@ export default function ChatPage() {
     chat.plan,
     chat.question,
     run,
+    chat.stream?.content,
+    chat.thought,
   ]);
 
   useEffect(() => {
@@ -218,6 +220,23 @@ export default function ChatPage() {
             </article>
           ))}
 
+          {/* in-flight assistant reply: sits exactly where the finalized
+              message will land, so completion never reflows the transcript */}
+          {chat.stream && chat.stream.content !== '' && (
+            <article role="chat-message" aria-label="assistant">
+              <MessageBubble
+                key={chat.stream.id}
+                message={{
+                  id: chat.stream.id,
+                  role: 'assistant',
+                  content: chat.stream.content,
+                  created_at: '',
+                }}
+                streaming
+              />
+            </article>
+          )}
+
           {chat.question && (
             <section aria-label="Agent question">
               <QuestionCard
@@ -269,7 +288,7 @@ export default function ChatPage() {
             </section>
           )}
 
-          {chat.pending && <TypingIndicator />}
+          {chat.pending && <ThinkingStatus thought={chat.thought} />}
 
           {showResults && run && <section aria-label="Run results"><ResultsCard run={run} /></section>}
 
