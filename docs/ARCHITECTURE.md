@@ -82,6 +82,19 @@ A check that errors (bad SQL, permission denied, missing table) is marked
 `error` and contributes to the score as a non-pass — it never aborts the run.
 Sample-row capture is best-effort and capped by `RUN_MAX_ROW_SAMPLE`.
 
+## Data policy (hard rule)
+
+No demo data. No dummy data. Only real.
+
+Every audit reads from connections the user actually provided, and every number
+in chat, plans and reports comes from a query that really ran. The product never
+fabricates or substitutes stand-ins:
+
+- no bundled/demo datasets, seed SQL or synthesized tables pretending to be
+  user data;
+- no synthetic rows, fake profiles or placeholder values shown to the user;
+- no invented results when a check cannot run — it reports `error` honestly.
+
 ## Adding a connector
 
 1. Subclass `Connector` in `app/connectors/`.
