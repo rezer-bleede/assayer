@@ -109,11 +109,13 @@ async def run_audit(
     session_id: str | None = None,
     emit: Emit | None = None,
     on_delta: Callable[[str], None] | None = None,
+    on_thought: Callable[[str], None] | None = None,
 ) -> RunResult:
     """Execute the approved plan, score it, and write the narrative.
 
     `on_delta`, when given, receives report-narrative tokens as they stream
     from the LLM, so the chat can show prose while it is still being written.
+    `on_thought` receives the model's private reasoning tokens the same way.
     """
     plan.run_id = run_id
     pending = RunResult(id=run_id, status=RunStatus.RUNNING, plan=plan, analysis=analysis)
@@ -127,7 +129,9 @@ async def run_audit(
     result.analysis = analysis
     if emit:
         emit("thought", {"text": "All checks done — writing the report…"})
-    result.narrative = await build_report(result, analysis, on_delta=on_delta)
+    result.narrative = await build_report(
+        result, analysis, on_delta=on_delta, on_thought=on_thought
+    )
 
     try:
         repo.save_run(result, session_id)

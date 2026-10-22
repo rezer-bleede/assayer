@@ -22,6 +22,9 @@ export type AgentEvent =
   | { type: 'message.delta'; id: string; text: string }
   | { type: 'thinking'; started_at: number }
   | { type: 'thought'; text: string }
+  | { type: 'thought.open'; id: string }
+  | { type: 'thought.delta'; id: string; text: string }
+  | { type: 'thought.close'; id: string; secs?: number }
   | { type: 'stage'; stage: string }
   | { type: 'agent.question'; question?: Question } & Record<string, unknown>
   | { type: 'connection.detected'; connection_id: string; requirement_key?: string | null }
@@ -54,6 +57,17 @@ export type AgentEvent =
   | { type: 'done'; stage?: string }
   | { type: 'error'; message: string };
 
+export type ReasoningBurst = { id: string; text: string; secs?: number | null; open: boolean };
+
+/** One live LLM-thinking burst ("Thought for 12 s"), expanded while streaming. */
+function applyBurst(bursts: ReasoningBurst[], id: string, patch: Partial<ReasoningBurst>) {
+  const idx = bursts.findIndex((b) => b.id === id);
+  if (idx < 0) return [...bursts, { id, text: '', open: false, ...patch }];
+  const next = [...bursts];
+  next[idx] = { ...next[idx], ...patch };
+  return next;
+}
+
 const STORAGE_KEY = 'qualitest.session';
 
 export function useAgentChat() {
@@ -79,6 +93,8 @@ export function useAgentChat() {
   const [stream, setStream] = useState<{ id: string; content: string } | null>(null);
   /** latest agent status line ("Profiling orders…", "Drafting the plan…") */
   const [thought, setThought] = useState<string | null>(null);
+  /** the model's live reasoning bursts (live-only; never persisted server-side) */
+  const [reasonings, setReasonings] = useState<ReasoningBurst[]>([]);
 
   const connect = useCallback((sid: string) => {
     wsRef.current?.close();
@@ -113,6 +129,7 @@ export function useAgentChat() {
           setMessages(Array.isArray(ev.messages) ? ev.messages : []);
           setStream(null);
           setThought(null);
+          setReasonings([]);
           break;
         case 'message': {
           const m: ChatMessage = {
@@ -152,6 +169,22 @@ export function useAgentChat() {
           break;
         case 'thought':
           setThought(ev.text || null);
+          break;
+        case 'thought.open':
+          setReasonings((b) => applyBurst(b, ev.id, { open: true }));
+          break;
+        case 'thought.delta':
+          setReasonings((b) => {
+            const found = b.find((x) => x.id === ev.id);
+            return applyBurst(
+              b,
+              ev.id,
+              { open: true, text: (found?.text ?? '') + (ev.text ?? '') },
+            );
+          });
+          break;
+        case 'thought.close':
+          setReasonings((b) => applyBurst(b, ev.id, { open: false, secs: ev.secs ?? null }));
           break;
         case 'stage':
           setStage(ev.stage);
@@ -221,11 +254,13 @@ export function useAgentChat() {
           setPending(false);
           setStream(null);
           setThought(null);
+          setReasonings((b) => b.map((x) => ({ ...x, open: false })));
           break;
         case 'done':
           setPending(false);
           setStream(null);
           setThought(null);
+          setReasonings((b) => b.map((x) => ({ ...x, open: false })));
           if (ev.stage) setStage(ev.stage);
           break;
       }
@@ -286,6 +321,7 @@ export function useAgentChat() {
     pending,
     stream,
     thought,
+    reasonings,
     plan,
     planRunId,
     progress,

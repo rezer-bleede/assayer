@@ -118,6 +118,37 @@ LLM_BASE_URL=http://host.docker.internal:11434/v1
 LLM_TIMEOUT_SECONDS=180
 ```
 
+#### Showing the model's thinking
+
+The chat streams the model's own reasoning above its reply: an expanded
+"Thinking…" panel while it reasons, which collapses to "Thought for Ns" when
+the answer lands. That needs a thinking-capable model in the same slot —
+`qwen2.5-coder:3b` never emits reasoning, so the panel simply never appears.
+With the native Ollama setup above, `qwen3.5:9b` (~7.6 GB) does:
+
+```dotenv
+# in .env
+LLM_MODEL=qwen3.5:9b
+OLLAMA_MODEL=qwen3.5:9b          # keep the two in sync
+LLM_TEMPERATURE=0.6              # its recommended reasoning temperature
+LLM_TIMEOUT_SECONDS=600          # thinking runs long; let it finish
+```
+
+Reasoning needs context room: the runner's default window (4096) can fill with
+reasoning alone, leaving the model looping without ever writing an answer. Bake
+a wider window into a derived model (no extra download — it shares the layers):
+
+```sh
+printf 'FROM qwen3.5:9b\nPARAMETER num_ctx 8192\n' > /tmp/q.ModelFile
+ollama create qwen3.5:9b-8k -f /tmp/q.ModelFile
+```
+
+then use `LLM_MODEL=qwen3.5:9b-8k` / `OLLAMA_MODEL=qwen3.5:9b-8k`. The bundled
+runner gets `OLLAMA_CONTEXT_LENGTH=16384` from compose. Either way a stalled or
+runaway stream is bounded — 120 s of silence or the wall-clock timeout ends the
+call with whatever was generated, and the deterministic planner/reporter takes
+over.
+
 Env changes apply on `make up` or `docker compose up -d api worker` (a plain
 `restart` does not re-read .env). To force the bundled runner on macOS anyway:
 `make up BUNDLED=1`, which expects `LLM_BASE_URL` to point at it (the default,

@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # a CPU-only host must not stall the agent for minutes: the deterministic
     # planner picks up as soon as this elapses.
     llm_timeout_seconds: int = 90
+    # A thinking model can stream reasoning for minutes. Silence longer than
+    # this (a wedged runner, a dropped stream) ends the call with whatever was
+    # generated, so the deterministic fallback can take over instead of the
+    # turn hanging until the wall-clock timeout.
+    llm_stream_stall_seconds: int = 120
     # Retries after the first attempt. Zero by default — with a good fallback,
     # retrying a slow or unreachable endpoint only delays the inevitable.
     llm_max_retries: int = 0

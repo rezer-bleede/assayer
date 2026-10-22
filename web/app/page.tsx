@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Composer } from '@/components/Composer';
-import { MessageBubble, ThinkingStatus, useAutoScroll } from '@/components/Message';
+import { MessageBubble, ReasoningBlock, ThinkingStatus, useAutoScroll } from '@/components/Message';
 import { PlanCard } from '@/components/PlanCard';
 import { QuestionCard, type QuestionStatus } from '@/components/QuestionCard';
 import { ResultsCard } from '@/components/ResultsCard';
@@ -45,6 +45,8 @@ export default function ChatPage() {
     run,
     chat.stream?.content,
     chat.thought,
+    chat.reasonings.reduce((n, b) => n + b.text.length, 0),
+    chat.reasonings.some((b) => b.open) ? 0 : 1,
   ]);
 
   useEffect(() => {
@@ -218,6 +220,12 @@ export default function ChatPage() {
             <article key={m.id} role="chat-message" aria-label={m.role}>
               <MessageBubble key={m.id} message={m} />
             </article>
+          ))}
+
+          {/* the model's live reasoning bursts sit above whatever they belong
+              to (the streaming bubble during the report, the transcript after) */}
+          {chat.reasonings.map((b) => (
+            <ReasoningBlock key={b.id} text={b.text} secs={b.secs} streaming={b.open} />
           ))}
 
           {/* in-flight assistant reply: sits exactly where the finalized

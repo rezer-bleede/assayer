@@ -8,7 +8,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from app.agent.planner import SourceBinding, plan_checks, summarize_analysis
 from app.agent.prompts import plan_prompt
-from app.core.llm import ainvoke, llm_available
+from app.core.llm import ThoughtCallback, ainvoke, llm_available
 from app.core.logging import log
 
 # Single enforcement point with the runner: the same tuple guards compile_check,
@@ -147,8 +147,10 @@ def _num(v: object) -> float | None:
     retry=retry_if_exception_type((RuntimeError, TimeoutError)),
     reraise=True,
 )
-async def _ask_llm(prompt: str) -> str:
-    return await ainvoke(prompt)
+async def _ask_llm(prompt: str, on_thought: ThoughtCallback | None = None) -> str:
+    # A thinking model reasons before it writes the JSON; the cap keeps that
+    # monologue from running forever on a runner that never closes the stream.
+    return await ainvoke(prompt, max_tokens=2000, on_thought=on_thought)
 
 
 def _extract_json(text: str) -> dict:
@@ -169,6 +171,7 @@ async def build_plan(
     user_intent: str | None = None,
     use_llm: bool = True,
     profiles: dict[str, dict] | None = None,
+    on_thought: ThoughtCallback | None = None,
 ) -> TestPlan:
     base = plan_checks(analysis, bindings, profile=profiles)
 
@@ -191,7 +194,10 @@ async def build_plan(
         for b in bindings
     ]
     try:
-        raw = await _ask_llm(plan_prompt(summarize_analysis(analysis), src_block, user_intent))
+        raw = await _ask_llm(
+            plan_prompt(summarize_analysis(analysis), src_block, user_intent),
+            on_thought=on_thought,
+        )
         parsed = _extract_json(raw)
         proposed = parsed.get("checks", []) if isinstance(parsed.get("checks", []), list) else []
         llm_checks = [c for c in (_coerce(r, bindings) for r in proposed) if c]

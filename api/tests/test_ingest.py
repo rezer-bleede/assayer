@@ -336,6 +336,7 @@ async def test_extract_connections_async_llm_fallback() -> None:
     fake_llm = types.ModuleType("app.core.llm")
     fake_llm.llm_available = lambda: True  # type: ignore[attr-defined]
     fake_llm.ainvoke = AsyncMock(return_value=llm_response)  # type: ignore[attr-defined]
+    fake_llm.thinking_disabled = lambda: {}  # type: ignore[attr-defined]
 
     # Inject the stub before the local import inside extract_connections_async runs
     original = sys.modules.get("app.core.llm", None)

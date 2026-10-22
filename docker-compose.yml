@@ -64,6 +64,10 @@ services:
     image: ollama/ollama:latest
     volumes:
       - ollama:/root/.ollama
+    environment:
+      # Default is 4096, which a thinking model can fill with reasoning alone —
+      # leaving no room for the answer. Give it a real window.
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-16384}
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 5s

@@ -59,7 +59,7 @@ app.include_router(chat.router)
 
 
 @app.middleware("http")
-async def timing(request: Request, call_next):  # type: ignore[no-untyped-def]
+async def timing(request: Request, call_next):
     t0 = time.perf_counter()
     response = await call_next(request)
     response.headers["X-Response-Time-ms"] = f"{(time.perf_counter() - t0) * 1000:.1f}"

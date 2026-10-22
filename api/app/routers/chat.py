@@ -295,6 +295,49 @@ class _StreamedReply:
         self._emit("message.delta", {"id": self.id, "text": text})
 
 
+class _ThinkingBurst:
+    """Emit `thought.open`/`thought.delta`/`thought.close` frames for one LLM call.
+
+    The model's private reasoning streams through `on_thought` (this sink) and
+    is shown as an expandable "Thinking…" panel; when the call ends, `close`
+    collapses it client-side with the seconds it took. Bursts are live-only:
+    the burst frames are never persisted, and the final `message` frame stays
+    untouched, so a reload never replays the reasoning.
+    """
+
+    def __init__(self, emit: Any) -> None:
+        self._emit = emit
+        self.id = new_id()
+        self._t0: float | None = None
+        self._opened = False
+        self._closed = False
+        self._pending: list[str] = []
+
+    def __call__(self, text: str) -> None:
+        if not text or self._closed:
+            return
+        if not self._opened:
+            if not text.strip():  # leading blanks are not the start of thinking
+                return
+            self._opened = True
+            self._t0 = time.time()
+            self._emit("thought.open", {"id": self.id})
+        self._pending.append(text)
+        self._emit("thought.delta", {"id": self.id, "text": text})
+
+    def text(self) -> str:
+        """Everything thought so far (call items on the client side too)."""
+        return "".join(self._pending)
+
+    def close(self) -> None:
+        """Collapse the burst with the seconds it took; no-op if never opened."""
+        if not self._opened or self._closed:
+            return
+        self._closed = True
+        secs = round(time.time() - (self._t0 or time.time()), 1)
+        self._emit("thought.close", {"id": self.id, "secs": secs})
+
+
 async def _absorb_pasted_code(text: str, session_id: str, emit: Any) -> tuple[str | None, str]:
     """Parse a pasted script if this message is one. Returns (etl_id, note)."""
     if not (looks_like_code(text) or text.strip().startswith("{")):
@@ -571,7 +614,15 @@ async def _plan(
         specs, introspected, [(b.schema, b.table) for b in bindings], emit=emit
     )
     emit("thought", {"text": "Drafting the quality plan…"})
-    plan = await build_plan(analysis, bindings, user_intent=user_intent[:300], profiles=profiles)
+    burst = _ThinkingBurst(emit)
+    plan = await build_plan(
+        analysis,
+        bindings,
+        user_intent=user_intent[:300],
+        profiles=profiles,
+        on_thought=burst,
+    )
+    burst.close()
 
     if not plan.checks:
         ctx["stage"] = str(ConversationStage.NEED_SOURCES)
@@ -657,6 +708,7 @@ async def _execute(
         )
 
     stream = _StreamedReply(emit)
+    burst = _ThinkingBurst(emit)
     emit("run.starting", {"run_id": plan.run_id})
     emit("thought", {"text": f"Running {len(plan.checks)} checks against live data…"})
     analysis = repo.get_etl(ctx.get("etl_id") or "")
@@ -668,7 +720,9 @@ async def _execute(
         session_id=session_id,
         emit=emit,
         on_delta=stream,
+        on_thought=burst,
     )
+    burst.close()
     ctx["last_run_id"] = result.id
     ctx["pending_plan"] = None
     ctx["question"] = None
@@ -743,17 +797,24 @@ async def ws_chat(ws: WebSocket) -> None:
 
             await send("thinking", {"started_at": time.time()})
             buf = EventBuffer()
-            pump = asyncio.create_task(buf.pump_forever(send))
+            stop = asyncio.Event()
+            pump = asyncio.create_task(buf.pump_forever(send, stop=stop))
             try:
                 outcome = await handle_turn(session_id, text, emit=buf, action=action, payload=body)
             except Exception as exc:  # noqa: BLE001
                 log.exception("turn failed")
-                await send("error", {"message": f"{type(exc).__name__}: {exc}"})
-                continue
+                error = f"{type(exc).__name__}: {exc}"
+                outcome = None
+            else:
+                error = None
             finally:
-                pump.cancel()
+                # let the pump finish the frame it is writing, then stop it
+                stop.set()
                 with contextlib.suppress(asyncio.CancelledError):
                     await pump
+            if error is not None:
+                await send("error", {"message": error})
+                continue
             await buf.flush(send)
 
             await send("stage", {"stage": outcome.stage})
@@ -809,12 +870,29 @@ class EventBuffer:
         for ev in self.drain():
             await send(ev["type"], ev["data"])
 
-    async def pump_forever(self, send: Any, interval: float = 0.05) -> None:
-        """Drain continuously so long turns stream progress live."""
+    async def pump_forever(
+        self,
+        send: Any,
+        interval: float = 0.05,
+        stop: asyncio.Event | None = None,
+    ) -> None:
+        """Drain continuously so long turns stream progress live.
+
+        `stop` asks the pump to finish the drain it is in and exit. Cancelling
+        it instead would interrupt a write mid-frame and wedge the socket:
+        every later frame would then be silently lost.
+        """
         try:
             while True:
                 await self.flush(send)
-                await asyncio.sleep(interval)
+                if stop is None:
+                    await asyncio.sleep(interval)
+                    continue
+                if stop.is_set():
+                    return
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(stop.wait(), timeout=interval)
         except asyncio.CancelledError:
-            await self.flush(send)
+            with contextlib.suppress(Exception):
+                await self.flush(send)
             raise

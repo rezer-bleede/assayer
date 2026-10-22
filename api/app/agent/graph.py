@@ -16,7 +16,7 @@ from app.agent.plan_builder import build_plan
 from app.agent.planner import SourceBinding, bind_sources
 from app.agent.tools.introspect import introspect_source, profile_table
 from app.agent.tools.report import build_report
-from app.core.llm import ainvoke, llm_available
+from app.core.llm import ainvoke, llm_available, thinking_disabled
 from app.core.logging import log
 from app.schemas import (
     ConnectionSpec,
@@ -206,7 +206,7 @@ async def narrate_failure(run: RunResult, result: Any) -> str:
     )
     if llm_available():
         try:
-            return await ainvoke(prompt, max_tokens=300)
+            return await ainvoke(prompt, max_tokens=300, **thinking_disabled())
         except Exception as exc:  # noqa: BLE001
             log.warning("llm explain failed", error=str(exc))
     return (

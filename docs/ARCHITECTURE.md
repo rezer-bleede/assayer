@@ -82,6 +82,32 @@ A check that errors (bad SQL, permission denied, missing table) is marked
 `error` and contributes to the score as a non-pass — it never aborts the run.
 Sample-row capture is best-effort and capped by `RUN_MAX_ROW_SAMPLE`.
 
+## Streaming and the thinking feed
+
+Long turns stream through one ordered `EventBuffer`: `thought {text}` step
+lines ("Profiling raw.orders…") narrate the deterministic work, while the
+LLM's own reply arrives as `message.start` → `message.delta` → `message`
+(final frame reuses the streamed id, so the UI replaces its bubble in place
+instead of duplicating it).
+
+Thinking-capable models expose their private reasoning live. `core/llm.astream`
+sits on the raw OpenAI SDK client (LangChain's chunk rewriting drops
+`delta.reasoning`) and routes `delta.reasoning` / `delta.reasoning_content` to
+`on_thought`; inline `<think>…</think>` tags are split out of `delta.content` for
+providers that stream reasoning in-band. `on_thought` feeds a `_ThinkingBurst`
+in the chat router, which emits `thought.open` → `thought.delta` →
+`thought.close {secs}` — an expandable "Thinking…" panel that collapses to a
+"Thought for Ns" pill once the reply lands. Bursts are live-only: the reasoning
+is never persisted, and a reload replays only the replies.
+
+Because reasoning can run long, `astream` bounds it: a chunk that never arrives
+within `LLM_STREAM_STALL_SECONDS` (120) or a call that reaches
+`LLM_TIMEOUT_SECONDS` ends the stream with whatever was generated, and the
+caller falls back (deterministic plan, rule-based narrative). Structured JSON
+callers (connection extraction, repair, check explanations) pass
+`thinking_disabled()`, which asks Ollama for `reasoning_effort: none` so the
+budget goes to the answer instead of a monologue.
+
 ## Data policy (hard rule)
 
 No demo data. No dummy data. Only real.

@@ -143,6 +143,89 @@ export function ThinkingStatus({ thought }: { thought?: string | null }) {
   );
 }
 
+/**
+ * The model's private reasoning: an expanded "Thinking…" panel while the
+ * burst streams, then a collapsed "Thought for 12 s" pill the user can
+ * reopen. Deltas are batched server-side, so `text` already coalesces.
+ */
+export function ReasoningBlock({
+  text,
+  secs,
+  streaming,
+}: {
+  text: string;
+  secs?: number | null;
+  streaming?: boolean;
+}) {
+  const [open, setOpen] = useState(Boolean(streaming));
+  const tail = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (streaming) setOpen(true);
+  }, [streaming]);
+
+  useEffect(() => {
+    if (open && streaming) {
+      const el = tail.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }, [open, streaming, text]);
+
+  const label = streaming
+    ? 'Thinking…'
+    : `Thought${secs ? ` for ${Math.max(1, Math.round(secs))} s` : ''}`;
+
+  return (
+    <div className="flex w-full animate-fade-up justify-start">
+      <div className="flex min-w-0 max-w-[min(62rem,92%)] flex-col items-start">
+        <button
+          type="button"
+          disabled={streaming}
+          aria-expanded={open}
+          aria-label="Model reasoning"
+          onClick={() => setOpen((o) => !o)}
+          className={cn(
+            'surface flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] transition-colors',
+            'hover:bg-ink/[0.04] dark:hover:bg-white/[0.06]',
+            streaming && 'cursor-default',
+          )}
+        >
+          <svg
+          width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            aria-hidden
+            className={cn('text-muted/60 transition-transform', open && 'rotate-90')}
+          >
+            <path
+              d="M3 1.5 6.5 5 3 8.5"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className={cn('select-none', streaming ? 'animate-pulse text-accent' : 'text-muted')}>
+            {label}
+          </span>
+        </button>
+        {open && (
+          <div
+            ref={tail}
+            className={cn(
+              'surface mt-1.5 w-full whitespace-pre-wrap rounded-2xl rounded-bl-sm',
+              'max-h-[240px] overflow-y-auto px-4 py-2.5 text-[11.5px] leading-relaxed text-muted',
+            )}
+          >
+            {text || (streaming ? '…' : '')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function useAutoScroll(dep: unknown) {
   const ref = useRef<HTMLDivElement>(null);
   const [stick, setStick] = useState(true);

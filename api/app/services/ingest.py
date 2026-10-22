@@ -355,13 +355,19 @@ async def extract_connections_async(text: str) -> list[ConnectionSpec]:
         return specs
 
     # 2. LLM fallback
-    from app.core.llm import ainvoke, llm_available  # local import to avoid circular deps
+    from app.core.llm import (  # local import to avoid circular deps
+        ainvoke,
+        llm_available,
+        thinking_disabled,
+    )
 
     if not llm_available():
         return []
 
     try:
-        raw = await ainvoke(_LLM_PROMPT.format(text=text[:4000]), max_tokens=400)
+        raw = await ainvoke(
+            _LLM_PROMPT.format(text=text[:4000]), max_tokens=400, **thinking_disabled()
+        )
     except Exception:  # noqa: BLE001
         log.warning("LLM connection extraction failed", exc_info=True)
         return []

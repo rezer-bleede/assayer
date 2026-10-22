@@ -328,12 +328,12 @@ async def _llm_candidates(
     databases: list[str],
 ) -> list[dict]:
     from app.agent.prompts import repair_prompt
-    from app.core.llm import ainvoke, llm_available
+    from app.core.llm import ainvoke, llm_available, thinking_disabled
 
     if not llm_available():
         return []
     prompt = repair_prompt(spec.redacted(), failures, hints, databases)
-    raw = await ainvoke(prompt, max_tokens=400)
+    raw = await ainvoke(prompt, max_tokens=400, **thinking_disabled())
     data = _parse_json_block(raw)
     candidates = data.get("candidates")
     if not isinstance(candidates, list):

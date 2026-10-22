@@ -135,7 +135,7 @@ async def test_build_plan_merges_valid_llm_checks_only(
     )
     monkeypatch.setattr("app.agent.plan_builder.llm_available", lambda: True)
 
-    async def _ask(prompt: str) -> str:
+    async def _ask(prompt: str, **_: object) -> str:
         return response
 
     monkeypatch.setattr("app.agent.plan_builder._ask_llm", _ask)

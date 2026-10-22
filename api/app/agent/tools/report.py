@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from app.agent.prompts import report_prompt
-from app.core.llm import astream, llm_available
+from app.core.llm import ThoughtCallback, astream, llm_available
 from app.core.logging import log
 from app.schemas import CheckStatus, EtlAnalysis, RunResult
 
@@ -84,6 +84,7 @@ async def build_report(
     run: RunResult,
     analysis: EtlAnalysis | None = None,
     on_delta: Callable[[str], None] | None = None,
+    on_thought: ThoughtCallback | None = None,
 ) -> str:
     summary = structured_summary(run)
     if not llm_available():
@@ -97,7 +98,10 @@ async def build_report(
     try:
         # the narrative is a page of prose, not a saga — bound it
         return await astream(
-            report_prompt(payload, summary["failures"]), max_tokens=800, on_delta=on_delta
+            report_prompt(payload, summary["failures"]),
+            max_tokens=800,
+            on_delta=on_delta,
+            on_thought=on_thought,
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("llm report failed, using fallback", error=str(exc))
