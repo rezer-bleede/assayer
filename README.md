@@ -101,6 +101,17 @@ LLM_API_KEY=sk-...
 LLM_MODEL=gpt-4o-mini
 ```
 
+A free tier without a credit card (Groq, 30 req/min, 1,000 req/day, 200K
+tokens/day per model — keys start with `gsk_`):
+
+```dotenv
+# in .env
+LLM_PROVIDER=groq
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_API_KEY=gsk_...
+LLM_MODEL=openai/gpt-oss-120b
+```
+
 #### Faster on macOS: run the model on the GPU
 
 The bundled runner stays the default everywhere **except macOS**: Docker on
@@ -384,7 +395,7 @@ See `.env.example`. Key knobs:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | ollama / http://ollama:11434/v1 / ollama / qwen2.5-coder:3b | any OpenAI-compatible endpoint |
+| `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | ollama / http://ollama:11434/v1 / ollama / qwen2.5-coder:3b | any OpenAI-compatible endpoint (hosted: OpenAI, Groq free tier, …) |
 | `OLLAMA_MODEL` | qwen2.5-coder:3b | the model the stack pulls into the local runner |
 | `RUN_MAX_CHECKS` | 200 | cap on checks per run |
 | `RUN_MAX_ROW_SAMPLE` | 20 | sample rows captured per failure |
