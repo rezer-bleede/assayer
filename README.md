@@ -80,6 +80,11 @@ uses it out of the box. Until the pull finishes, the agent falls back to its
 deterministic planner, so the app is usable immediately. (On macOS `make up`
 skips the bundled runner — see the next section.)
 
+The local development setup uses `qwen2.5-coder:3b` to keep the model footprint
+manageable. The heavier `qwen3.5:9b` and `qwen3.5:9b-8k` tags were removed from
+the development Mac; install a larger model only if you specifically want its
+reasoning output (see below).
+
 To use a bigger model, or a hosted one:
 
 ```dotenv
@@ -124,7 +129,8 @@ The chat streams the model's own reasoning above its reply: an expanded
 "Thinking…" panel while it reasons, which collapses to "Thought for Ns" when
 the answer lands. That needs a thinking-capable model in the same slot —
 `qwen2.5-coder:3b` never emits reasoning, so the panel simply never appears.
-With the native Ollama setup above, `qwen3.5:9b` (~7.6 GB) does:
+If you want to enable this optional feature, install a larger model such as
+`qwen3.5:9b` (~7.6 GB) with the native Ollama setup:
 
 ```dotenv
 # in .env
