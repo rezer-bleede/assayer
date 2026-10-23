@@ -50,6 +50,43 @@ def update_session_payload(session_id: str, payload: dict[str, Any]) -> None:
             row.payload = payload
 
 
+def bind_etl(session_id: str | None, analysis: EtlAnalysis) -> None:
+    """Attach an analysed codebase to the conversation without chat metadata."""
+    if not session_id:
+        return
+    ensure_session(session_id)
+    ctx = load_session_payload(session_id)
+    ctx["etl_id"] = analysis.id
+    ctx["requirements"] = [r.model_dump(mode="json") for r in analysis.required_sources]
+    ctx["stage"] = "need_sources" if analysis.required_sources else "ready"
+    ctx["question"] = None
+    ctx["missing_tables"] = []
+    ctx["stage_updated_at"] = utcnow_str()
+    update_session_payload(session_id, ctx)
+
+
+def bind_connection(
+    session_id: str | None,
+    connection_id: str | None,
+    requirement_key: str | None,
+) -> None:
+    """Attach a REST-verified connection to the conversation."""
+    if not (session_id and connection_id):
+        return
+    ensure_session(session_id)
+    ctx = load_session_payload(session_id)
+    ids = list(ctx.get("connection_ids", []))
+    if connection_id not in ids:
+        ids.append(connection_id)
+    ctx["connection_ids"] = ids
+    if requirement_key:
+        ctx.setdefault("answered", {})[requirement_key] = connection_id
+    ctx["question"] = None
+    ctx["stage"] = "need_sources"
+    ctx["stage_updated_at"] = utcnow_str()
+    update_session_payload(session_id, ctx)
+
+
 # --------------------------------------------------------------------------- #
 # connections
 # --------------------------------------------------------------------------- #
@@ -216,17 +253,62 @@ def list_runs(session_id: str | None = None, limit: int = 50) -> list[RunResult]
 
 
 def append_message(session_id: str, message: ChatMessage) -> ChatMessage:
+    payload = message.model_dump(mode="json")
     with write_session() as s:
-        s.add(
-            ChatMessageRow(
-                id=message.id,
-                session_id=session_id,
-                role=str(message.role),
-                created_at=message.created_at.isoformat(),
-                payload=message.model_dump(mode="json"),
+        row = s.get(ChatMessageRow, message.id)
+        if row is None:
+            s.add(
+                ChatMessageRow(
+                    id=message.id,
+                    session_id=session_id,
+                    role=str(message.role),
+                    created_at=message.created_at.isoformat(),
+                    payload=payload,
+                )
             )
-        )
+        else:
+            row.payload = payload
+            row.role = str(message.role)
     return message
+
+
+def get_message(message_id: str) -> ChatMessage | None:
+    with write_session() as s:
+        row = s.get(ChatMessageRow, message_id)
+        return ChatMessage.model_validate(row.payload) if row else None
+
+
+def list_threads() -> list[dict[str, Any]]:
+    with write_session() as s:
+        rows = s.query(SessionRow).order_by(SessionRow.created_at.desc()).all()
+        return [
+            {
+                "id": r.id,
+                "title": (r.payload or {}).get("title") or "New audit",
+                "createdAt": r.created_at,
+            }
+            for r in rows
+        ]
+
+
+def rename_thread(session_id: str, title: str) -> dict[str, Any] | None:
+    with write_session() as s:
+        row = s.get(SessionRow, session_id)
+        if row is None:
+            return None
+        payload = dict(row.payload or {})
+        payload["title"] = title[:120]
+        row.payload = payload
+        return {"id": row.id, "title": payload["title"], "createdAt": row.created_at}
+
+
+def delete_thread(session_id: str) -> None:
+    with write_session() as s:
+        for row in s.query(ChatMessageRow).filter(ChatMessageRow.session_id == session_id).all():
+            s.delete(row)
+        row = s.get(SessionRow, session_id)
+        if row is not None:
+            s.delete(row)
 
 
 def list_messages(session_id: str, limit: int = 200) -> list[ChatMessage]:

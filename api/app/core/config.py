@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # retrying a slow or unreachable endpoint only delays the inevitable.
     llm_max_retries: int = 0
 
+    # --- OpenUI authoring (AG-UI surface) ---
+    # The model writes the OpenUI Lang program; the deterministic serializer
+    # is the fallback when it is slow, invalid, or unavailable.
+    openui_author_enabled: bool = True
+    openui_author_max_tokens: int = 1400
+
     # --- run limits ---
     run_max_checks: int = 200
     run_query_timeout_seconds: int = 300

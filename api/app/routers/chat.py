@@ -238,6 +238,8 @@ def _answered(requirement: SourceRequirement, ctx: dict, specs: dict[str, Connec
     answered = ctx.get("answered") or {}
     if answered.get(requirement.key):
         return True
+    if requirement.key in (ctx.get("skipped") or []):
+        return True
 
     want = {t.split(".")[-1].lower() for t in requirement.tables}
     for cid in ctx.get("connection_ids", []):
@@ -429,6 +431,12 @@ async def handle_turn(
     if action == "skip_question" and payload.get("requirement_key"):
         # honour it, but remember the requirement is unmet so the plan may be thin
         ctx.setdefault("skipped", []).append(payload["requirement_key"])
+
+    if action is None and text.strip().lower() == "skip" and ctx.get("question"):
+        key = (ctx.get("question") or {}).get("requirement_key")
+        if key:
+            ctx.setdefault("skipped", []).append(key)
+            notes.append("Skipped that source; the plan may not cover it.")
 
     # ---- 1b. adopt a connection the agent had to repair ------------------- #
     adopted = False
@@ -640,6 +648,7 @@ async def _plan(
     )
     ctx["pending_plan"] = plan.id
     ctx["question"] = None
+    ctx["missing_tables"] = missing
     ctx["stage"] = str(ConversationStage.AWAITING_APPROVAL)
     _persist(session_id, ctx)
 

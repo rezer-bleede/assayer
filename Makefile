@@ -1,4 +1,4 @@
-.PHONY: help up down build logs ps shell test migrate clean fmt lint
+.PHONY: help up down build logs ps shell test migrate clean fmt lint openui-prompt
 
 UNAME := $(shell uname -s)
 
@@ -53,6 +53,11 @@ fmt: ## Format + autofix
 
 lint: ## Lint only
 	docker compose exec api ruff check . && docker compose exec api mypy app
+
+openui-prompt: ## Regenerate the OpenUI system prompt + spec from the web library
+	cd web && npx --no-install openui generate lib/openui/library.tsx \
+	  --export qualitestLibrary --no-interactive \
+	  -o ../api/app/agent/prompts/openui.md
 
 clean: ## Stop + remove volumes
 	docker compose down -v

@@ -2,6 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  transpilePackages: ['@openuidev/react-lang', '@openuidev/react-ui', '@openuidev/react-headless'],
   // Stack traces in the browser error boundary point at real source.
   // Off by default: source maps ship the original source to the client.
   productionBrowserSourceMaps: process.env.NEXT_SOURCE_MAPS === 'true',

@@ -251,6 +251,12 @@ def _to_response(
         if (persist and result.ok and not result.repaired)
         else None
     )
+    if connection_id:
+        repo.bind_connection(
+            session_id,
+            connection_id,
+            str(given.options.get("requirement_key") or "") or None,
+        )
     return TestConnectionResponse(
         connection_id=connection_id,
         status=status,

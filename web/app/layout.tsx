@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { themeScript } from '@/lib/theme';
+import '@openuidev/react-ui/styles/index.css';
 import './globals.css';
 
 export const metadata: Metadata = {

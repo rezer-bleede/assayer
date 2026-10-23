@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.llm import llm_available
 from app.core.logging import configure_logging, log
 from app.core.routes import SafeAPIRoute
-from app.routers import chat, connections, etl, runs
+from app.routers import agent, chat, connections, etl, runs, threads
 from app.store.db import init_db
 
 configure_logging()
@@ -56,6 +56,8 @@ app.include_router(connections.router)
 app.include_router(etl.router)
 app.include_router(runs.router)
 app.include_router(chat.router)
+app.include_router(agent.router)
+app.include_router(threads.router)
 
 
 @app.middleware("http")

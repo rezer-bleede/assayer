@@ -243,7 +243,8 @@ api/                     FastAPI + LangGraph backend
     parsers/             sql (sqlglot) · python (ast) · dbt
     runner/              check compilation, executor, scoring
     services/            chat ingest, audit orchestration
-    routers/             chat (WS), connections, etl, runs
+    routers/             agent (AG-UI SSE), threads (OpenUI restStorage),
+                         chat (legacy WS), connections, etl, runs
     store/               SQLAlchemy state store + repository
     worker.py            Redis-backed execution worker
   tests/                 pytest suite
@@ -300,9 +301,29 @@ curl localhost:8010/api/runs/<run_id>/report
 curl localhost:8010/api/runs/<run_id>/export
 ```
 
-`WS /ws/chat` carries the full conversational loop: send
+The **web UI** is OpenUI's `AgentInterface`. It does not post to the legacy
+WebSocket; it uses two small protocols:
+
+- **`POST /agent`** — AG-UI SSE. The body is
+  `{threadId, messages, tools, context}`; the response is a sequence of
+  `TEXT_MESSAGE_START`, one `TEXT_MESSAGE_CONTENT` (an OpenUI Lang program that
+  describes the whole turn), and `TEXT_MESSAGE_END`. The model authors the
+  program from the turn state; a deterministic serializer is the fallback when
+  the model is slow, unavailable, or emits invalid OpenUI Lang.
+- **`/api/threads/*`** — thread history for the UI (`GET /get`,
+  `POST /create`, `GET /get/{id}`, `PATCH /update/{id}`,
+  `DELETE /delete/{id}`).
+
+The legacy `WS /ws/chat` loop still exists for scripted/older clients: send
 `{"session_id": "...", "content": "...", "action": "approve"}` and receive
 `message`, `plan.ready`, `check.completed`, `run.completed` events.
+
+Regenerate the OpenUI system prompt and component spec after changing
+`web/lib/openui/library.tsx`:
+
+```bash
+make openui-prompt
+```
 
 ---
 
@@ -375,6 +396,8 @@ See `.env.example`. Key knobs:
 | `INTAKE_DATA_MAX_BYTES` | 8000000 | per-file cap for data files that get profiled |
 | `INTAKE_TOTAL_MAX_BYTES` | 4000000 | total source text kept for lineage |
 | `LLM_TEMPERATURE` | 0.1 | LLM temperature |
+| `OPENUI_AUTHOR_ENABLED` | true | let the LLM author each OpenUI turn (fallback if it fails) |
+| `OPENUI_AUTHOR_MAX_TOKENS` | 1400 | token budget for one authored OpenUI program |
 
 ## License
 

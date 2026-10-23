@@ -55,6 +55,7 @@ def _parse(submit: EtlSubmit) -> EtlAnalysis:
 def analyze(req: EtlSubmit, session_id: str | None = None) -> AnalyzeResponse:
     analysis = _parse(req)
     repo.save_etl(analysis, session_id)
+    repo.bind_etl(session_id, analysis)
     return AnalyzeResponse(analysis=analysis, required_sources=analysis.required_sources)
 
 
@@ -102,6 +103,7 @@ async def from_repo(req: RepoRequest) -> AnalyzeResponse:
     )
     analysis.risks = [*content.warnings, *analysis.risks]
     repo.save_etl(analysis, req.session_id)
+    repo.bind_etl(req.session_id, analysis)
     log.info(
         "repo analysed",
         url=content.repo_url,
@@ -113,7 +115,7 @@ async def from_repo(req: RepoRequest) -> AnalyzeResponse:
 
 @router.post("/upload", response_model=AnalyzeResponse)
 async def upload(
-    session_id: str | None = Form(default=None),
+    session_id: str | None = None,
     mode: str = Form(
         default="folder",
         description="`folder` for a directory pick/drop (strict filtering); "
@@ -210,6 +212,7 @@ async def upload(
     )
     analysis.risks = [*intake.notes, *analysis.risks]
     repo.save_etl(analysis, session_id)
+    repo.bind_etl(session_id, analysis)
     log.info(
         "upload analysed",
         uploaded=len(raw_items),
