@@ -241,3 +241,32 @@ def test_no_contract_check_without_a_matching_file() -> None:
     analysis = _analysis_with_profile("id", "email", "lifetime_value")
     checks = plan_checks(analysis, [_binding()])
     assert [c for c in checks if str(c.kind) == "schema"] == []
+
+
+def test_bind_sources_does_not_double_bind_a_table_across_connections() -> None:
+    """Two connections answering two requirements on the same server must not
+    bind every table twice — that double-runs every check in the audit."""
+    from app.agent.planner import bind_sources
+    from app.schemas import ConnectionSpec
+
+    analysis = EtlAnalysis(
+        language="sql",
+        raw_code="x",
+        sources=["raw.customers"],
+        targets=["analytics.raw_customers"],
+        required_sources=[],
+    )
+    tables = [
+        {"name": "customers", "schema": "raw", "row_count": 4},
+        {"name": "raw_customers", "schema": "analytics", "row_count": 3},
+    ]
+    specs = {
+        "c1": ConnectionSpec(type="postgres", name="one", options={"tables": ["raw.customers"]}),
+        "c2": ConnectionSpec(
+            type="postgres", name="two", options={"tables": ["analytics.raw_customers"]}
+        ),
+    }
+    bindings = bind_sources(analysis, specs, {"c1": tables, "c2": tables})
+    keys = {(b.schema, b.table) for b in bindings}
+    assert len(bindings) == 2
+    assert keys == {("raw", "customers"), ("analytics", "raw_customers")}

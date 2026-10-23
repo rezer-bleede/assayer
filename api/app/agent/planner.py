@@ -126,6 +126,17 @@ def bind_sources(
             meta = _match_meta(tables, ref)
             if meta is None:
                 continue
+            inferred_target = ref in targets and ref not in sources_refs
+            # an explicit answer already claimed this exact table in this role;
+            # binding it again through a second connection double-counts checks
+            already_bound = any(
+                b.table == _bare(meta.get("name", ref))
+                and b.schema == (meta.get("schema") or getattr(spec, "schema_", None))
+                and b.is_target == inferred_target
+                for b in bindings
+            )
+            if already_bound:
+                continue
             bindings.append(
                 SourceBinding(
                     source_id=cid,
