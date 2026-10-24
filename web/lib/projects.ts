@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { API_URL, api, type Project } from './api';
 import { storage } from './storage';
 
-const ACTIVE_KEY = 'qualitest.active-project';
+const ACTIVE_KEY = 'assayer.active-project';
 
 type ProjectsState = {
   projects: Project[];

@@ -1,10 +1,12 @@
-# data-qualitest-agent
+# assayer
 
 <div align="center">
 
-# qualitest
+<img src="web/public/logo.svg" alt="Assayer logo" width="64" />
 
-**Agentic data testing and data quality auditing.**
+# assayer
+
+**Assay your data. Trust your pipeline.** Agentic data testing and quality auditing for pipelines, databases, and web apps.
 
 Provide your data connection details and ETL code/script — the agent figures out transformations, designs a test plan, connects to your data sources, runs tests, and reports results.
 
@@ -52,7 +54,7 @@ Provide your data connection details and ETL code/script — the agent figures o
 ```bash
 # 1. Clone the repo
 git clone <your-repo-url>
-cd data-qualitest-agent
+cd assayer
 
 # 2. Start the stack — that is the whole setup
 docker compose up -d --build
@@ -364,7 +366,7 @@ The stack seeds a deliberately dirty dataset by itself on first boot, so there
 is nothing to run. Open the chat at http://localhost:3010 and paste:
 
 ```
-postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest
+postgresql://assayer:assayer@host.docker.internal:55432/assayer
 ```
 
 Paste `examples/demo_daily_revenue.sql`, approve the plan. A verified run

@@ -1,16 +1,16 @@
-name: data-qualitest-agent
+name: assayer
 
 services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-qualitest}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qualitest}
-      POSTGRES_DB: ${POSTGRES_DB:-qualitest}
+      POSTGRES_USER: ${POSTGRES_USER:-assayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-assayer}
+      POSTGRES_DB: ${POSTGRES_DB:-assayer}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qualitest}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-assayer}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -39,9 +39,9 @@ services:
       db:
         condition: service_healthy
     environment:
-      PGUSER: ${POSTGRES_USER:-qualitest}
-      PGPASSWORD: ${POSTGRES_PASSWORD:-qualitest}
-      PGDATABASE: ${POSTGRES_DB:-qualitest}
+      PGUSER: ${POSTGRES_USER:-assayer}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-assayer}
+      PGDATABASE: ${POSTGRES_DB:-assayer}
     volumes:
       - ./scripts/demo:/demo:ro
     entrypoint: ["/bin/sh", "-c"]
@@ -107,7 +107,7 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qualitest}:${POSTGRES_PASSWORD:-qualitest}@db:5432/${POSTGRES_DB:-qualitest}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-assayer}:${POSTGRES_PASSWORD:-assayer}@db:5432/${POSTGRES_DB:-assayer}
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
@@ -146,7 +146,7 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qualitest}:${POSTGRES_PASSWORD:-qualitest}@db:5432/${POSTGRES_DB:-qualitest}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-assayer}:${POSTGRES_PASSWORD:-assayer}@db:5432/${POSTGRES_DB:-assayer}
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}

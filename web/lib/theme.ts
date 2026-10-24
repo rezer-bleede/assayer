@@ -17,7 +17,7 @@ import { storage } from './storage';
 export type Theme = 'light' | 'dark';
 export type ThemeChoice = Theme | 'system';
 
-const STORAGE_KEY = 'qualitest.theme';
+const STORAGE_KEY = 'assayer.theme';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 /** Browser chrome colours, matching the CSS palette. */

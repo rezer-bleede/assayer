@@ -55,7 +55,7 @@ class _FileConnectorBase(Connector):
         raise NotImplementedError
 
     def _materialize(self) -> None:
-        self._tmpdir = tempfile.mkdtemp(prefix="qualitest_")
+        self._tmpdir = tempfile.mkdtemp(prefix="assayer_")
         readers = {
             "csv": "read_csv_auto('{path}', header=true)",
             "json": "read_json_auto('{path}')",
@@ -161,7 +161,7 @@ class S3FilesConnector(_FileConnectorBase):
 
         prefix = self.spec.key or self.spec.path or ""
         if not self._tmpdir:
-            self._tmpdir = tempfile.mkdtemp(prefix="qualitest_")
+            self._tmpdir = tempfile.mkdtemp(prefix="assayer_")
 
         out: list[tuple[str, str]] = []
         paginator = s3.get_paginator("list_objects_v2")

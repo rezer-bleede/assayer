@@ -90,7 +90,7 @@ def generate_usecase1_gif():
 
     for step_title, lines in steps:
         for pulse in range(3):
-            img, draw = create_window_frame("Qualitest · Use Case 1", "ETL LINEAGE")
+            img, draw = create_window_frame("Assayer · Use Case 1", "ETL LINEAGE")
 
             # Step header
             draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
@@ -149,7 +149,7 @@ def generate_usecase2_gif():
 
     for step_title, lines in steps:
         for pulse in range(3):
-            img, draw = create_window_frame("Qualitest · Use Case 2", "DATA PROFILING")
+            img, draw = create_window_frame("Assayer · Use Case 2", "DATA PROFILING")
 
             draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
             draw.text((35, 64), step_title, font=subtitle_font, fill=ACCENT_AMBER)
@@ -205,7 +205,7 @@ def generate_usecase3_gif():
 
     for step_title, lines in steps:
         for pulse in range(3):
-            img, draw = create_window_frame("Qualitest · Use Case 3", "TEST PLANNING")
+            img, draw = create_window_frame("Assayer · Use Case 3", "TEST PLANNING")
 
             draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
             draw.text((35, 64), step_title, font=subtitle_font, fill=ACCENT_PURPLE)
@@ -261,7 +261,7 @@ def generate_usecase4_gif():
 
     for step_title, lines in steps:
         for pulse in range(3):
-            img, draw = create_window_frame("Qualitest · Use Case 4", "AUDIT REPORTING")
+            img, draw = create_window_frame("Assayer · Use Case 4", "AUDIT REPORTING")
 
             draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
             draw.text((35, 64), step_title, font=subtitle_font, fill=ACCENT_GREEN)

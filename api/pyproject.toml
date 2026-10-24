@@ -1,5 +1,5 @@
 [project]
-name = "data-qualitest-agent-api"
+name = "assayer-api"
 version = "0.1.0"
 description = "Agentic data testing and data quality auditing tool"
 requires-python = ">=3.11"

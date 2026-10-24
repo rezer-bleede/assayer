@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-SYSTEM = """You are the test-engineering copilot inside `qualitest`, an agentic data \
+SYSTEM = """You are the test-engineering copilot inside `assayer`, an agentic data \
 quality auditing tool.
 
 Your job: given data source metadata and a user's ETL script, derive what the \

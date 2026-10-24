@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="data-qualitest-agent API",
+    title="Assayer API",
     version="0.1.0",
     description=(
         "Agentic data testing and data quality auditing. "

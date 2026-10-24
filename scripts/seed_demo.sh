@@ -9,7 +9,7 @@
 # get the pristine, deliberately broken dataset back.
 #
 # Then in the chat window:
-#   postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest
+#   postgresql://assayer:assayer@host.docker.internal:55432/assayer
 #
 # Injected defects (each should be caught by a check):
 #   raw.orders.order_id    duplicate id
@@ -50,7 +50,7 @@ cat <<'MSG'
 
 Seeded. Paste this into the chat window:
 
-  postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest
+  postgresql://assayer:assayer@host.docker.internal:55432/assayer
 
 ...and tell the agent the target is analytics.daily_revenue. Then paste:
 

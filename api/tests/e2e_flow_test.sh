@@ -18,7 +18,7 @@ echo "$RESP" | python3 -c "import sys,json; [print(f'  - {r[\"key\"]}: {r[\"tabl
 
 echo ""
 echo "=== Step 3: Provide connection for raw database ==="
-RESP=$(curl -s -X POST "$API/api/connections/from-url" -H "Content-Type: application/json" -d "{\"url\":\"postgresql://qualitest:qualitest@db:5432/qualitest\",\"session_id\":\"$SESSION\",\"requirement_key\":\"db:raw\",\"tables\":[\"raw.orders\",\"raw.customers\"],\"target_tables\":[]}")
+RESP=$(curl -s -X POST "$API/api/connections/from-url" -H "Content-Type: application/json" -d "{\"url\":\"postgresql://assayer:assayer@db:5432/assayer\",\"session_id\":\"$SESSION\",\"requirement_key\":\"db:raw\",\"tables\":[\"raw.orders\",\"raw.customers\"],\"target_tables\":[]}")
 echo "$RESP" | python3 -m json.tool | head -10
 CONN_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['connection_id'])")
 echo "Connection ID: $CONN_ID"

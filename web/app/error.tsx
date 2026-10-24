@@ -17,7 +17,7 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[qualitest] unhandled client error:', error);
+    console.error('[assayer] unhandled client error:', error);
   }, [error]);
 
   return (

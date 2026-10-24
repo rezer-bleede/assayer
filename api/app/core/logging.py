@@ -27,4 +27,4 @@ def configure_logging() -> None:
     )
 
 
-log = structlog.get_logger("qualitest")
+log = structlog.get_logger("assayer")

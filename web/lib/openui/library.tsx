@@ -861,7 +861,7 @@ const RepairCard = defineComponent({
   component: RepairView,
 });
 
-export const qualitestLibrary = openuiChatLibrary.extend({
+export const assayerLibrary = openuiChatLibrary.extend({
   components: {
     add: [
       { component: Welcome, slots: ['Card.children'] },

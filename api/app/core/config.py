@@ -15,14 +15,14 @@ class Settings(BaseSettings):
     )
 
     # --- app ---
-    app_name: str = "data-qualitest-agent"
+    app_name: str = "assayer"
     environment: str = "development"
     secret_key: str = "change-me"
     cors_origins: str = "*"
     log_level: str = "INFO"
 
     # --- state store ---
-    database_url: str = "postgresql+psycopg://qualitest:qualitest@db:5432/qualitest"
+    database_url: str = "postgresql+psycopg://assayer:assayer@db:5432/assayer"
     redis_url: str = "redis://redis:6379/0"
 
     # --- llm ---
@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     ui_nav_timeout_seconds: int = 15
     ui_max_steps: int = 25
     ui_max_pages: int = 12
-    ui_artifact_dir: str = "/tmp/qualitest-ui-artifacts"
+    ui_artifact_dir: str = "/tmp/assayer-ui-artifacts"
     ui_allow_private_hosts: bool = True
     ui_visual_default_tolerance: float = 0.005
 
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     repo_max_file_bytes: int = 256_000
     repo_max_total_bytes: int = 4_000_000
     repo_clone_timeout_seconds: int = 120
-    repo_tmp_dir: str = "/tmp/qualitest-repos"
+    repo_tmp_dir: str = "/tmp/assayer-repos"
     # RFC1918 is allowed by default (internal GitLab/GitHub Enterprise are the
     # common case), but cloud metadata + loopback are always refused.
     repo_allow_private_hosts: bool = True

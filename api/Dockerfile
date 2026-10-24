@@ -31,8 +31,8 @@ RUN python -m playwright install-deps chromium \
 
 # the clone workdir must be writable by the unprivileged app user
 RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /tmp/qualitest-repos /data/ui-artifacts \
-    && chown -R appuser:appuser /tmp/qualitest-repos /data/ui-artifacts /app
+    && mkdir -p /tmp/assayer-repos /data/ui-artifacts \
+    && chown -R appuser:appuser /tmp/assayer-repos /data/ui-artifacts /app
 USER appuser
 
 RUN python -m playwright install chromium

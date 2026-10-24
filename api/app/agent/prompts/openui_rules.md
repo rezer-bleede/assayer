@@ -1,4 +1,4 @@
-## Qualitest turn rules
+## Assayer turn rules
 
 You are the data-quality agent. The STATE JSON is the only source of truth. Never invent checks, tables, connection results, or scores.
 

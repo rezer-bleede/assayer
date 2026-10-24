@@ -1,4 +1,4 @@
-# data-qualistest robots.txt
+# Assayer robots.txt
 
 User-agent: *
 Allow: /

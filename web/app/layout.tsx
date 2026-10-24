@@ -5,8 +5,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | qualitest',
-    default: 'qualitest — agentic data quality auditing',
+    template: '%s | assayer',
+    default: 'assayer — agentic data quality testing',
   },
   description:
     'Agentic data testing and data quality auditing tool. Paste your data connection URLs and ETL scripts — the agent figures out transformations, designs a test plan, runs it against live sources, and reports failures with row-level samples.',
@@ -21,41 +21,40 @@ export const metadata: Metadata = {
     'schema validation',
     'data integrity',
   ].join(', '),
-  authors: [{ name: 'qualitest' }],
-  publisher: 'qualitest',
+  authors: [{ name: 'assayer' }],
+  publisher: 'assayer',
   category: 'Developer Tools',
   formatDetection: {
     telephone: false,
   },
-  metadataBase: new URL('https://qualitest.dev'),
+  metadataBase: new URL('https://assayer.dev'),
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'qualitest — agentic data quality auditing',
+    title: 'assayer — agentic data quality testing',
     description:
       'Agentic data testing and data quality auditing tool. Paste your data connection URLs and ETL scripts — the agent figures out transformations, designs a test plan, runs it against live sources, and reports failures with row-level samples.',
     type: 'website',
-    url: 'https://qualitest.dev/',
+    url: 'https://assayer.dev/',
     images: [
       {
         url: '/android-chrome-512x512.png',
         width: 512,
         height: 512,
-        alt: 'qualitest logo',
+        alt: 'assayer data quality testing logo',
         type: 'image/png',
       },
     ],
-    siteName: 'qualitest',
+    siteName: 'assayer',
     locale: 'en_US',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'qualitest — agentic data quality auditing',
+    title: 'assayer — agentic data quality testing',
     description:
       'Agentic data testing and data quality auditing tool. Paste your data connection URLs and ETL scripts — the agent figures out transformations, designs a test plan, runs it against live sources, and reports failures with row-level samples.',
     images: ['/android-chrome-512x512.png'],
-    creator: '@qualitest',
   },
   robots: {
     index: true,
@@ -89,6 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
         <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
@@ -100,28 +100,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'SoftwareApplication',
-              name: 'qualitest',
-              alternateName: 'qualitest-agent',
+              name: 'assayer',
+              alternateName: 'assayer-agent',
               description:
                 'Agentic data testing and data quality auditing tool for ETL pipelines, databases, and data platforms.',
               applicationCategory: 'DeveloperApplication',
               operatingSystem: 'Linux, Windows, macOS',
-              applicationSuite: 'qualitest-agent',
+              applicationSuite: 'assayer',
               offers: {
                 '@type': 'Offer',
                 price: '0',
                 priceCurrency: 'USD',
                 availability: 'https://schema.org/InStock',
-                url: 'https://qualitest.dev/',
+                url: 'https://assayer.dev/',
               },
               author: {
                 '@type': 'Organization',
-                name: 'qualitest',
+                name: 'assayer',
               },
               publisher: {
                 '@type': 'Organization',
-                name: 'qualitest',
-                url: 'https://qualitest.dev/',
+                name: 'assayer',
+                url: 'https://assayer.dev/',
               },
               keywords: [
                 'data quality',

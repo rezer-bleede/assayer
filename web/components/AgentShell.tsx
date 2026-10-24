@@ -14,7 +14,7 @@
 import { AgentInterface, agUIAdapter, fetchLLM } from '@openuidev/react-ui';
 import { useEffect, useState } from 'react';
 import { API_URL } from '@/lib/api';
-import { qualitestLibrary } from '@/lib/openui/library';
+import { assayerLibrary } from '@/lib/openui/library';
 import { projectAwareStorage, useProjects } from '@/lib/projects';
 import { useTheme } from '@/lib/theme';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
@@ -57,8 +57,9 @@ export default function AgentShell() {
     <AgentInterface
       llm={llm}
       storage={threadStorage}
-      componentLibrary={qualitestLibrary}
-      agentName="qualitest"
+      componentLibrary={assayerLibrary}
+      agentName="assayer"
+      logoUrl="/logo.svg"
       starters={starters}
       theme={{ mode: theme }}
       path={navPath}

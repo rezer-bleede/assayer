@@ -50,7 +50,7 @@ def test_saved_connection_is_actually_persisted(store) -> None:
     """Regression: `with SessionLocal()` closes without committing."""
     from app.schemas import ConnectionSpec
 
-    spec = ConnectionSpec(type="postgres", name="dwh", host="db", database="qualitest")
+    spec = ConnectionSpec(type="postgres", name="dwh", host="db", database="assayer")
     rec = repo.save_connection(spec, "sess-1")
 
     assert "connections" in _tables(store)

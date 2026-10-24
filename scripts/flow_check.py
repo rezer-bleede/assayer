@@ -15,7 +15,7 @@ import websockets
 API, WS = "http://api:8000", "ws://api:8000/ws/chat"
 SID = "flow-" + uuid.uuid4().hex[:8]
 JAX = "https://github.com/dbt-labs/jaffle_shop"
-CONN = "postgresql://qualitest:qualitest@db:5432/qualitest"
+CONN = "postgresql://assayer:assayer@db:5432/assayer"
 TABLES = ["raw_customers", "raw_orders", "raw_payments", "customers", "orders"]
 
 
@@ -145,7 +145,7 @@ async def main():
         # ---------- secrets must not be in the transcript ----------
         hist = await rest(f"/api/sessions/{SID}/messages")
         blob = json.dumps(hist)
-        leaked = [frag for frag in ("qualitest:qualitest@", "qualitest:qualitest@db") if frag in blob]
+        leaked = [frag for frag in ("assayer:assayer@", "assayer:assayer@db") if frag in blob]
         assert not leaked, f"CREDENTIAL LEAK: {leaked}"
         assert "password" not in blob.lower() or "***" in blob
         print("\n[transcript]", len(hist["messages"]), "messages, masked:",

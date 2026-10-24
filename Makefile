@@ -56,7 +56,7 @@ lint: ## Lint only
 
 openui-prompt: ## Regenerate the OpenUI system prompt + spec from the web library
 	cd web && npx --no-install openui generate lib/openui/library.tsx \
-	  --export qualitestLibrary --no-interactive \
+	  --export assayerLibrary --no-interactive \
 	  -o ../api/app/agent/prompts/openui.md
 
 clean: ## Stop + remove volumes

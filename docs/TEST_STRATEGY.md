@@ -87,7 +87,7 @@ The demo dataset is applied by the stack itself on first boot
 (`scripts/demo/*.sql`, via the `demo-seed` service) — there is nothing to seed
 by hand.
 
-Then paste `postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest`
+Then paste `postgresql://assayer:assayer@host.docker.internal:55432/assayer`
 and `examples/demo_daily_revenue.sql` into the chat. Verified baseline:
 **29 checks, 85.31/100, 22 passed, 7 failed, 0 errors.**
 

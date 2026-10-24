@@ -20,8 +20,8 @@ from app.services.orchestrator import run_audit
 from app.store import repository as repo
 from app.store.db import init_db
 
-QUEUE = "qualitest:jobs"
-PROGRESS_CHANNEL = "qualitest:progress"
+QUEUE = "assayer:jobs"
+PROGRESS_CHANNEL = "assayer:progress"
 _results: list[RunResult] = []
 
 

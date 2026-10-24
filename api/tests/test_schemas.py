@@ -6,7 +6,7 @@ from app.schemas import ConnectionSpec, EtlSubmit
 def test_secret_round_trips_through_json_dump() -> None:
     """Regression: SecretStr serialises to '**********', which breaks persistence."""
     spec = ConnectionSpec(
-        type="postgres", name="dwh", host="db", database="qualitest", password="s3cr3t"
+        type="postgres", name="dwh", host="db", database="assayer", password="s3cr3t"
     )
     dumped = spec.model_dump(mode="json")
     assert dumped["password"] == "s3cr3t", "secret must survive a JSON round-trip"

@@ -68,7 +68,7 @@ function applyBurst(bursts: ReasoningBurst[], id: string, patch: Partial<Reasoni
   return next;
 }
 
-const STORAGE_KEY = 'qualitest.session';
+const STORAGE_KEY = 'assayer.session';
 
 export function useAgentChat() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -115,7 +115,7 @@ export function useAgentChat() {
         ev = { ...(raw.data ?? {}), type: raw.type } as AgentEvent;
         if (!ev.type) return;
       } catch {
-        console.debug('[qualitest] ignoring non-JSON frame');
+        console.debug('[assayer] ignoring non-JSON frame');
         return;
       }
 

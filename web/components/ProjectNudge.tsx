@@ -10,7 +10,7 @@ import { useNav, useThreadList } from '@openuidev/react-ui';
 import { useState } from 'react';
 import { useProjects } from '@/lib/projects';
 
-const DECIDED_KEY = 'qualitest.project-nudge-decided';
+const DECIDED_KEY = 'assayer.project-nudge-decided';
 
 function decided(): boolean {
   try {

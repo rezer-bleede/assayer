@@ -5,7 +5,7 @@
 -- is a no-op and user data inside these tables is never clobbered.
 --
 -- Paste this into the chat at http://localhost:3010:
---   postgresql://qualitest:qualitest@host.docker.internal:55432/qualitest
+--   postgresql://assayer:assayer@host.docker.internal:55432/assayer
 -- then the example from examples/demo_daily_revenue.sql.
 
 CREATE SCHEMA IF NOT EXISTS raw;
