@@ -43,7 +43,7 @@ def _fallback_narrary(run: RunResult) -> str:
     s = run.score
     verdict = "healthy" if s.overall >= 95 else "degraded" if s.overall >= 75 else "broken"
     lines = [
-        f"**Verdict** — pipeline is **{verdict}** (quality score {s.overall}/100).",
+        f"**Verdict** — target is **{verdict}** (QA score {s.overall}/100).",
         "",
         f"{s.passed} passed · {s.failed} failed · {s.errored} errored · {s.skipped} skipped "
         f"in {run.duration_ms or 0}ms.",
@@ -62,7 +62,7 @@ def _fallback_narrary(run: RunResult) -> str:
         for r in errors[:5]:
             lines.append(f"- {r.name}: {r.message}")
     if not failures and not errors:
-        lines += ["", "No quality violations detected. All executed checks passed."]
+        lines += ["", "No issues detected. All executed checks passed."]
     return "\n".join(lines)
 
 

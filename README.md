@@ -6,9 +6,9 @@
 
 # assayer
 
-**Assay your data. Trust your pipeline.** Agentic data testing and quality auditing for pipelines, databases, and web apps.
+**Agentic testing & QA.** Test data, ETL, web apps, and UI/UX with focused plans, evidence-based checks, and clear results.
 
-Provide your data connection details and ETL code/script — the agent figures out transformations, designs a test plan, connects to your data sources, runs tests, and reports results.
+Share a project, connect a source, or provide a web-app URL. The agent analyzes the available evidence, proposes relevant checks for your target, and reports results.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://docker.com/)
@@ -18,36 +18,36 @@ Provide your data connection details and ETL code/script — the agent figures o
 
 </div>
 
-## Key Use Cases & Capabilities
+## Core testing & QA capabilities
 
 <table width="100%">
   <tr>
     <td width="50%" align="center" valign="top">
-      <h3>1. ETL Lineage & Transformation Parsing</h3>
+      <h3>1. ETL Testing & Transformation Analysis</h3>
       <img src="docs/assets/usecase1-etl-lineage.gif" alt="ETL Lineage & Transformation Parsing" width="100%" />
       <p><i>Parse SQL queries, Python AST, & dbt models into table/column lineage and flag transformation risks automatically.</i></p>
     </td>
     <td width="50%" align="center" valign="top">
-      <h3>2. Data Source Profiling & Drift Detection</h3>
+      <h3>2. Data Validation & Drift Detection</h3>
       <img src="docs/assets/usecase2-data-profiling.gif" alt="Data Source Profiling & Drift Detection" width="100%" />
       <p><i>Profile live databases and seed files (CSV/Parquet) to inspect distributions and verify schema contracts.</i></p>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center" valign="top">
-      <h3>3. Automated Test Planning & Approval</h3>
+      <h3>3. Test Planning Across Targets</h3>
       <img src="docs/assets/usecase3-test-planning.gif" alt="Automated Test Planning & Approval" width="100%" />
       <p><i>Synthesize baseline & LLM-augmented test suites with human-in-the-loop review before execution.</i></p>
     </td>
     <td width="50%" align="center" valign="top">
-      <h3>4. Read-Only Audit & Scorecard Reporting</h3>
+      <h3>4. QA Results & Scorecard Reporting</h3>
       <img src="docs/assets/usecase4-audit-reporting.gif" alt="Read-Only Audit & Scorecard Reporting" width="100%" />
       <p><i>Execute non-destructive probes, capture failure row samples, score quality (0–100), and generate AI root-cause analysis.</i></p>
     </td>
   </tr>
 </table>
 
-**Frontend UI checks:** paste a web-app URL to add browser-based end-to-end checks alongside data audits. The agent can check route loading, visible elements, console/network errors, UI values against warehouse queries, browser flows, and screenshot drift.
+**Web and UI/UX testing:** provide a web-app URL for browser-based checks. The agent can verify route loading, visible elements, console/network errors, UI values against source queries, browser flows, and screenshot drift. Data validation is one of the supported verticals, alongside ETL, web, and UI/UX testing.
 
 ## Quick start
 
@@ -76,12 +76,12 @@ or the provider.
 > Light or dark: the header has a switch. The app follows your OS until you
 > pick one, then remembers your choice.
 
-> **Projects** (like ChatGPT / Claude): group audits into a project and give
-> it custom instructions plus small knowledge files — business rules, metric
-> definitions, schema docs. The agent reads them in every chat filed into
+> **Projects** (like ChatGPT / Claude): group test sessions into a project and give
+> it custom instructions plus small knowledge files — business rules, test
+> expectations, runbooks, or technical docs. The agent reads them in every chat filed into
 > that project, when it plans tests, runs them and writes the report.
 > Projects are optional; unfiled chats behave exactly as before, and the app
-> offers a project when you start a new audit.
+> offers a project when you start a new test session.
 
 ### The model
 
@@ -199,9 +199,9 @@ deterministic planner would build (verified: 29 checks, same defects).
 ## How it works
 
 ```
-you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ──▶  draft test plan
-              (URLs, creds)  (sqlglot /   (schemas, columns,   (keys, nulls,
-                             ast / dbt)    row counts, types)   ranges, parity)
+you share  ──▶  ingest ──▶  analyze target ──▶  inspect evidence ──▶  draft test plan
+             (project, URL,  (code, ETL, web,  (sources, routes,     (target-specific
+              or source)     UI behavior)       UI behavior)          checks)
                                                                  │
                                            you approve  ◀────────┘
                                                  │
@@ -230,10 +230,10 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
    - **Python** (AST): `read_sql` / `read_csv` / `to_sql` / `merge` / `groupby` idioms, variable-level lineage, risks (`drop_duplicates`, `fillna`, non-idempotent appends, `dropna` row loss).
    - **dbt**: `manifest.json` lineage + declared tests, or `{{ ref() }}` / `{{ source() }}` from raw model SQL.
 3. **Profile** — introspect each source (schemas, tables, columns, types, PKs, row counts) and profile sampled columns.
-4. **Plan** — a deterministic baseline (keys → lineage parity → completeness → validity → freshness → drift), augmented by the LLM. Thresholds are set from *observed* null rates, not guesses.
-5. **Approve** — human-in-the-loop. Nothing touches your data until you click.
+4. **Plan** — target-specific checks, augmented by the LLM. Data checks use observed profiles and schemas; web/UI checks use discovered routes, elements, and behavior.
+5. **Approve** — human-in-the-loop. No checks run against connected sources until you approve the plan.
 6. **Execute** — each check compiles to a single aggregate `SELECT`, re-validated as read-only immediately before running.
-7. **Report** — weighted quality score (0–100) broken down by severity, pass/fail table, failing-row samples, and a narrative tying failures back to the transformation that caused them.
+7. **Report** — QA score (0–100) broken down by severity, check results and available evidence, plus a narrative explaining failures and likely causes.
 
    Web targets use headless Playwright Chromium. Their approved plans include discovered same-origin routes, element presence, console/network health, screenshot baselines, and navigation flows. Add a target by choosing **Test a web app** or pasting an app URL (for example `http://host.docker.internal:3000`) into chat. The web-target form supports HTTP Basic auth, custom headers, selector-configured form login, and an explicit allowlist for cross-origin assets/API requests; top-level flows remain on the app origin. Credentials are sent to the API rather than through chat. UI-to-warehouse parity checks can be added with a selector and read-only scalar query. Flow checks may interact with application state; review the plan before approving.
 

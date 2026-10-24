@@ -1,4 +1,4 @@
-"""Shared domain models for the data quality agent."""
+"""Shared domain models for the testing and QA agent."""
 
 from __future__ import annotations
 

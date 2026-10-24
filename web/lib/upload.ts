@@ -206,11 +206,11 @@ export async function fromDataTransfer(dt: DataTransfer): Promise<NamedFile[]> {
   return fromFileList(dt.files); // plain-files drop / browsers without the entry API
 }
 
-/** Human summary for the upload card: "34 files · 3 data files profiled of 12,000". */
+/** Human summary for the upload card: "34 files · 3 data files to profile of 12,000". */
 export function describeSelection(sel: FileSelection): string {
   const { codeFiles, dataFiles, totalSeen } = sel;
   const bits = [`${codeFiles} code/config file${codeFiles === 1 ? '' : 's'}`];
-  if (dataFiles > 0) bits.push(`${dataFiles} data file${dataFiles === 1 ? '' : 's'} to profile`);
+  if (dataFiles > 0) bits.push(`${dataFiles} dataset file${dataFiles === 1 ? '' : 's'} to profile`);
   if (totalSeen === sel.files.length) return bits.join(' + ');
   return `${bits.join(' + ')} of ${totalSeen.toLocaleString()} (${(totalSeen - sel.files.length).toLocaleString()} skipped)`;
 }

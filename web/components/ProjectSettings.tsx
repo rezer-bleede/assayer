@@ -133,7 +133,7 @@ export function ProjectSettings({ projectId, onBack }: { projectId: string; onBa
         <textarea
           value={instructions}
           rows={5}
-          placeholder="e.g. Our finance team treats amount columns as cents; never warn on test-schema tables; blockers must page the on-call."
+          placeholder="e.g. Treat staging failures as warnings; verify checkout totals against the business rules; prioritize critical user journeys."
           onChange={(e) => setInstructions(e.target.value)}
           onBlur={() => {
             if (instructions !== detail.instructions) void persist({ instructions });
@@ -177,7 +177,7 @@ export function ProjectSettings({ projectId, onBack }: { projectId: string; onBa
           ))}
           {(detail.files ?? []).length === 0 ? (
             <p className="text-[12.5px] text-muted">
-              No files yet — add business rules, metric definitions or schema docs
+              No files yet — add business rules, test expectations, runbooks or technical docs
               (text files, ≤ 256 KB each).
             </p>
           ) : null}

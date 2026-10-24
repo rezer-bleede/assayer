@@ -35,8 +35,8 @@ app = FastAPI(
     title="Assayer API",
     version="0.1.0",
     description=(
-        "Agentic data testing and data quality auditing. "
-        "Provide connections + ETL, the agent derives a test plan and runs it."
+        "Agentic testing and QA for data, ETL, web applications, and UI/UX. "
+        "Share a project or connect a target to build a focused test plan and review results."
     ),
     default_response_class=ORJSONResponse,
     lifespan=lifespan,

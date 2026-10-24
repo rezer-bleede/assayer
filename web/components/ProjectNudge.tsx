@@ -60,8 +60,8 @@ export function ProjectNudge() {
       <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-border bg-surface/95 p-4 shadow-lg backdrop-blur">
         <p className="mb-3 text-[13px] leading-relaxed text-fg">
           {projects.length > 0
-            ? 'Run this audit inside a project? Its instructions and knowledge files apply to every chat filed there.'
-            : 'Group audits into a project — custom instructions and knowledge files the agent uses in every chat inside it.'}
+            ? 'Run this test session inside a project? Its instructions and knowledge files apply to every chat filed there.'
+            : 'Group test sessions into a project — custom instructions and knowledge files the agent uses in every chat inside it.'}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {projects.map((p) => (

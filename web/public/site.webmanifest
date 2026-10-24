@@ -1,7 +1,7 @@
 {
   "name": "assayer",
   "short_name": "assayer",
-  "description": "Agentic data testing and data quality auditing tool for ETL pipelines, databases, and data platforms.",
+  "description": "Agentic testing and QA for data, ETL, web apps, and UI/UX.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
@@ -30,6 +30,6 @@
       "purpose": "any"
     }
   ],
-  "categories": ["data-quality", "data-testing", "etl", "analytics", "developer-tools"],
+  "categories": ["developer-tools", "testing", "quality-assurance", "etl", "web-development"],
   "lang": "en"
 }

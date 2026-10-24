@@ -181,12 +181,10 @@ export function QuestionCard({
             )}
           >
             <p className="text-[13px] text-muted">
-              Select or drop your <b>project folder</b>. I read the transformation code and
-              config (<code className="font-mono">.sql</code>,{' '}
-              <code className="font-mono">.py</code>, dbt YAML + manifest) for lineage, and{' '}
-              <b>profile</b> your data files (CSV, JSON, parquet: columns, types, row count)
-              instead of loading them. Dependencies, lock files, binaries and generated
-              artifacts are skipped.
+              Select or drop your <b>project folder</b>. I analyze supported source code and
+              configuration to identify testable behavior, and <b>profile</b> data files (CSV,
+              JSON, parquet: columns, types, row count) instead of loading them. Dependencies,
+              lock files, binaries and generated artifacts are skipped.
             </p>
             <div className="mt-3 flex items-center justify-center gap-2">
               <button type="button" className="btn-primary" onClick={() => dirRef.current?.click()}>
@@ -217,7 +215,7 @@ export function QuestionCard({
                 <p className="text-[12px] font-medium text-pass">{describeSelection(sel)}</p>
                 {sel.dataFiles > 0 && (
                   <p className="mt-0.5 text-[11.5px] text-muted">
-                    Data files are profiled (schema + row count), not read into the analysis.
+                    Data files are profiled (schema + row count); their full contents are not read into the analysis.
                   </p>
                 )}
                 <ul className="mt-1 space-y-0.5">
@@ -238,8 +236,8 @@ export function QuestionCard({
         {activeOption?.kind === 'paste' && (
           <div className="text-[13px] leading-relaxed text-muted">
             <p>
-              Paste a script into the box below. One self-contained SQL/Python file works;
-              anything bigger is better given to me as a repo or a set of files.
+              Paste a script or configuration snippet into the box below. For a larger project,
+              share a repository or upload the relevant files.
             </p>
             <button type="button" className="btn-ghost mt-3" onClick={onPaste}>
               Focus the input
@@ -410,7 +408,7 @@ function ConnectionForm({
         // The URL embeds the DB password; keep it out of browser storage.
         autoComplete="off"
         spellCheck={false}
-        placeholder={prefill.placeholder || 'postgresql://user:password@host:5432/database'}
+        placeholder={prefill.placeholder || 'Connection URL or endpoint'}
         value={url}
         disabled={busy}
         autoFocus

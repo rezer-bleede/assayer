@@ -30,16 +30,20 @@ const threadStorage = projectAwareStorage();
 
 const starters = [
   {
-    displayText: 'Audit a dbt project',
-    prompt: 'I want to audit a dbt project from a Git repository.',
+    displayText: 'Validate my data',
+    prompt: 'I want to validate a data source or files and check for quality issues.',
   },
   {
-    displayText: 'Upload my ETL code',
-    prompt: 'I want to upload a folder with my ETL code.',
+    displayText: 'Test my ETL pipeline',
+    prompt: 'I want to test an ETL pipeline and verify its transformations.',
   },
   {
-    displayText: 'Test a live database',
-    prompt: 'I have a database connection and want to test the data.',
+    displayText: 'Test my web app',
+    prompt: 'I want to test a live web app for availability, browser errors, and key page behavior.',
+  },
+  {
+    displayText: 'Check my UI for regressions',
+    prompt: 'I want to check my app UI for interaction issues and visual regressions.',
   },
 ];
 

@@ -37,7 +37,7 @@ export function ResultsCard({ run }: { run: RunResult }) {
           <span className={cn('text-2xl font-semibold tabular-nums', tone)}>
             {overall.toFixed(1)}
           </span>
-          <span className="text-xs text-muted">/ 100 quality score</span>
+          <span className="text-xs text-muted">/ 100 QA score</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
           <Stat label="passed" value={score.passed} cls="text-pass" />

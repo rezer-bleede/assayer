@@ -87,7 +87,7 @@ function WelcomeView({ props }: { props: z.infer<typeof welcomeSchema> }) {
   const trigger = useTriggerAction();
   return (
     <section className="animate-fade-up rounded-xl border bg-gradient-to-b from-accent/[0.07] to-transparent px-5 py-6">
-      <span className="chip mb-3 bg-accent/12 text-accent">data quality agent</span>
+      <span className="chip mb-3 bg-accent/12 text-accent">agentic testing &amp; QA</span>
       <h2 className="text-balance text-[24px] font-semibold leading-tight tracking-tight">
         {props.title}
       </h2>
@@ -340,7 +340,7 @@ function IntakeView({ props }: { props: z.infer<typeof intakeSchema> }) {
         {option.kind === 'file_upload' && (
           <div className="rounded-xl border border-dashed px-4 py-5 text-center">
             <p className="text-[12.5px] leading-relaxed text-muted">
-              Select your project folder. SQL, Python, dbt config and small JSON files are read for lineage; data files are profiled only.
+              Select a project folder. Source code and configuration are analyzed for testable behavior; supported data files are profiled without loading their full contents into the analysis.
             </p>
             <div className="mt-3 flex items-center justify-center gap-2">
               <button type="button" className="btn-primary" onClick={() => dirRef.current?.click()} disabled={status.busy}>
@@ -461,7 +461,7 @@ function IntakeView({ props }: { props: z.infer<typeof intakeSchema> }) {
 const IntakeCard = defineComponent({
   name: 'IntakeCard',
   description:
-    'Interactive intake form for a git repository, project upload, or database connection. It performs the REST action itself and then continues the conversation.',
+    'Interactive intake form for a project repository, file upload, data source connection, or web app target. It performs the REST action itself and then continues the conversation.',
   props: intakeSchema,
   component: IntakeView,
 });
@@ -621,7 +621,7 @@ function ReportView({ props }: { props: z.infer<typeof reportSchema> }) {
       <header className="flex flex-wrap items-center gap-4 border-b px-4 py-3">
         <div className="flex items-baseline gap-2">
           <span className={cn('text-2xl font-semibold tabular-nums', tone)}>{overall.toFixed(1)}</span>
-          <span className="text-xs text-muted">/ 100 quality score</span>
+          <span className="text-xs text-muted">/ 100 QA score</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
           {([['passed', props.counts.passed, 'text-pass'], ['failed', props.counts.failed, 'text-fail'], ['errored', props.counts.errored, 'text-warn'], ['skipped', props.counts.skipped, 'text-muted']] as const).map(([label, value, cls]) => (
@@ -712,7 +712,7 @@ function ReportView({ props }: { props: z.infer<typeof reportSchema> }) {
 
 const AuditReport = defineComponent({
   name: 'AuditReport',
-  description: 'Final quality report with score, counts, and expandable check results.',
+  description: 'Final test report with a score, counts, and expandable check results.',
   props: reportSchema,
   component: ReportView,
 });
@@ -758,7 +758,7 @@ function EtlView({ props }: { props: z.infer<typeof etlSchema> }) {
       </div>
       {!!props.profiles?.length && (
         <div className="border-t px-4 py-3">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted">Profiled data files</h4>
+          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted">Profiled files</h4>
           <ul className="mt-1.5 space-y-1">
             {props.profiles.map((p) => (
               <li key={p.path} className="text-[12px] text-muted">
@@ -783,7 +783,7 @@ function EtlView({ props }: { props: z.infer<typeof etlSchema> }) {
 
 const EtlCard = defineComponent({
   name: 'EtlCard',
-  description: 'Summary of the analyzed ETL codebase and profiled data files.',
+  description: 'Summary of the analyzed project, detected sources and targets, risks, and any profiled files.',
   props: etlSchema,
   component: EtlView,
 });
@@ -825,7 +825,7 @@ function ConnectionView({ props }: { props: z.infer<typeof connectionSchema> }) 
 
 const ConnectionCard = defineComponent({
   name: 'ConnectionCard',
-  description: 'Result of a database connection check, including matched tables.',
+  description: 'Result of a source connection check, including matched resources when available.',
   props: connectionSchema,
   component: ConnectionView,
 });
@@ -856,7 +856,7 @@ function RepairView({ props }: { props: z.infer<typeof repairSchema> }) {
 
 const RepairCard = defineComponent({
   name: 'RepairCard',
-  description: 'A repaired database address the user can accept with a single action.',
+  description: 'A suggested corrected connection address the user can accept with a single action.',
   props: repairSchema,
   component: RepairView,
 });

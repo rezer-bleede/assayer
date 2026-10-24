@@ -123,7 +123,7 @@ export function ProjectsSidebar({
 
         {projects.length === 0 && !adding ? (
           <p className="px-3 pb-2 text-[11.5px] leading-relaxed text-muted">
-            Group audits into a project: custom instructions and knowledge files the agent uses
+            Group test runs into a project: custom instructions and knowledge files the agent uses
             in every chat filed there.
           </p>
         ) : null}

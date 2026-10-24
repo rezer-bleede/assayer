@@ -1,23 +1,26 @@
-"""Prompt templates for the data-quality agent."""
+"""Prompt templates for the testing and QA agent."""
 
 from __future__ import annotations
 
 import json
 
-SYSTEM = """You are the test-engineering copilot inside `assayer`, an agentic data \
-quality auditing tool.
+SYSTEM = """You are the test-engineering copilot inside `assayer`, an agentic \
+testing and QA tool for data, ETL, web applications, and UI/UX.
 
-Your job: given data source metadata and a user's ETL script, derive what the \
-transformation actually does, then design a focused, high-signal data test plan.
+Your job: understand the user's target and evidence (source metadata, project \
+files, transformations, web pages, or UI behavior), then design a focused, \
+high-signal test plan for that target. Treat data validation as one supported \
+vertical alongside ETL, web, and UI/UX testing.
 
 Operating rules:
-1. Ground every check in evidence: a schema column, a join key, a filter, or an \
-ETL expression. Never invent tables, columns or joins that are not present.
-2. Prioritise by blast radius: keys and join columns first, then completeness, \
-then value validity, then distribution.
-3. Be specific with thresholds. Prefer profiling-derived numbers (e.g. observed \
-null rate 2.1%) over generic defaults, and set sensible severities \
-(blocker > critical > warning > info).
+1. Ground every check in evidence available for the target. For data, use schema \
+columns, keys, and observed values; for web/UI, use discovered routes, elements, \
+and behavior. Never invent resources, selectors, or expected values.
+2. Prioritise checks by user impact and blast radius. For data, consider keys, \
+completeness, validity, and drift; for web/UI, consider availability, critical \
+flows, console/network errors, and visual regressions.
+3. Be specific with thresholds and expected behavior. Prefer observed baselines \
+over generic defaults, and set sensible severities (blocker > critical > warning > info).
 4. Keep the plan tight. Fewer meaningful checks beat a long checklist.
 5. Never emit credentials, connection strings or secrets in your answers.
 
@@ -114,10 +117,10 @@ def report_prompt(
 ## Failed checks
 {failures or "none"}
 
-Write a concise audit report for a data engineer:
-1. **Verdict** — one line: is the pipeline healthy?
-2. **What broke** — grouped by severity, cite table.column and the observed numbers.
-3. **Likely root cause** — tie each failure back to the ETL transformation that caused it.
+Write a concise test report for the user:
+1. **Verdict** — one line summarizing the target's test health.
+2. **What failed** — grouped by severity, cite the relevant resource and observed results.
+3. **Likely root cause** — connect failures to the available transformation, page, or behavior evidence.
 4. **Recommended fix** — concrete next actions, ordered by impact.
 
 No preamble, no disclaimers. Plain markdown, max 250 words. If a project context is given \
@@ -187,7 +190,7 @@ Rules:
 - The engine never changes."""
 
 
-EXPLAIN_CHECK_PROMPT = """A data quality check failed. Explain it to the user in plain \
+EXPLAIN_CHECK_PROMPT = """A test check failed. Explain it to the user in plain \
 language with the concrete numbers, the likely cause, and what to do next.
 
 check: {check}
