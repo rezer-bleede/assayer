@@ -72,6 +72,13 @@ or the provider.
 > Light or dark: the header has a switch. The app follows your OS until you
 > pick one, then remembers your choice.
 
+> **Projects** (like ChatGPT / Claude): group audits into a project and give
+> it custom instructions plus small knowledge files — business rules, metric
+> definitions, schema docs. The agent reads them in every chat filed into
+> that project, when it plans tests, runs them and writes the report.
+> Projects are optional; unfiled chats behave exactly as before, and the app
+> offers a project when you start a new audit.
+
 ### The model
 
 A local model runner ships with the stack: the first boot pulls
@@ -255,7 +262,8 @@ api/                     FastAPI + LangGraph backend
     runner/              check compilation, executor, scoring
     services/            chat ingest, audit orchestration
     routers/             agent (AG-UI SSE), threads (OpenUI restStorage),
-                         chat (legacy WS), connections, etl, runs
+                         projects (grouping + knowledge), chat (legacy WS),
+                         connections, etl, runs
     store/               SQLAlchemy state store + repository
     worker.py            Redis-backed execution worker
   tests/                 pytest suite
@@ -324,6 +332,13 @@ WebSocket; it uses two small protocols:
 - **`/api/threads/*`** — thread history for the UI (`GET /get`,
   `POST /create`, `GET /get/{id}`, `PATCH /update/{id}`,
   `DELETE /delete/{id}`).
+- **`/api/projects/*`** — Projects (ChatGPT/Claude-style grouping):
+  `GET/POST /api/projects`, `PATCH/DELETE /api/projects/{id}`,
+  `GET/POST /api/projects/{id}/files` (small text knowledge files),
+  `DELETE /api/projects/{id}/files/{file_id}`, plus `POST /api/threads/move`
+  to file or unfile a chat. `POST /api/threads/create` accepts a `projectId`
+  and `GET /api/threads/get` returns it; a filed chat's instructions and
+  knowledge files are folded into the agent's prompts for every turn.
 
 The legacy `WS /ws/chat` loop still exists for scripted/older clients: send
 `{"session_id": "...", "content": "...", "action": "approve"}` and receive

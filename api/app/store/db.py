@@ -1,4 +1,4 @@
-"""SQLAlchemy engine/session for app state (connections, ETL, plans, runs, chat)."""
+"""SQLAlchemy engine/session for app state (connections, ETL, plans, runs, chat, projects)."""
 
 from __future__ import annotations
 
@@ -75,6 +75,27 @@ class ChatMessageRow(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     session_id: Mapped[str] = mapped_column(String(64), index=True)
     role: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ProjectRow(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    instructions: Mapped[str] = mapped_column(String(8000), default="")
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ProjectFileRow(Base):
+    __tablename__ = "project_files"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    size: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[str] = mapped_column(String(40), default="")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
 
@@ -169,6 +190,8 @@ __all__ = [
     "RunRow",
     "CheckResultRow",
     "ChatMessageRow",
+    "ProjectRow",
+    "ProjectFileRow",
     "engine",
     "SessionLocal",
     "session_scope",

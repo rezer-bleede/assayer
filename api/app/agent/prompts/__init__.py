@@ -26,12 +26,14 @@ def plan_prompt(
     etl_summary: str,
     sources: list[dict],
     user_intent: str | None = None,
+    project_context: str | None = None,
 ) -> str:
     src_block = "\n".join(
         f"- id={s['id']!r} type={s['type']!r} schema={s.get('schema')!r} table={s['table']!r}"
         for s in sources
     )
-    return f"""## ETL analysis (deterministic parse)
+    pc = f"{project_context}\n\n" if project_context else ""
+    return f"""{pc}## ETL analysis (deterministic parse)
 {etl_summary}
 
 ## Available tables in connected sources
@@ -64,7 +66,9 @@ Design the test plan. Respond with a single JSON object:
   ]
 }}
 
-Use `"schema"` (not `schema_`) and `"table"` keys exactly as written above. Cap the plan at 60 checks."""
+Use `"schema"` (not `schema_`) and `"table"` keys exactly as written above. If a project \
+context is given above, honour its instructions and align checks with its knowledge files \
+(these supplement the ETL evidence; they never replace it). Cap the plan at 60 checks."""
 
 
 def interpret_prompt(
@@ -91,8 +95,11 @@ code, acknowledge what was captured and state what you need next. If a test plan
 awaiting approval, remind them they can approve, edit or regenerate it."""
 
 
-def report_prompt(run_summary: dict, failures: list[dict]) -> str:
-    return f"""## Run summary
+def report_prompt(
+    run_summary: dict, failures: list[dict], project_context: str | None = None
+) -> str:
+    pc = f"{project_context}\n\n" if project_context else ""
+    return f"""{pc}## Run summary
 {run_summary}
 
 ## Failed checks
@@ -104,7 +111,8 @@ Write a concise audit report for a data engineer:
 3. **Likely root cause** — tie each failure back to the ETL transformation that caused it.
 4. **Recommended fix** — concrete next actions, ordered by impact.
 
-No preamble, no disclaimers. Plain markdown, max 250 words."""
+No preamble, no disclaimers. Plain markdown, max 250 words. If a project context is given \
+above, interpret failures against its instructions and knowledge files."""
 
 
 # --------------------------------------------------------------------------- #

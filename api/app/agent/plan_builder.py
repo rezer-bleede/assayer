@@ -172,6 +172,7 @@ async def build_plan(
     use_llm: bool = True,
     profiles: dict[str, dict] | None = None,
     on_thought: ThoughtCallback | None = None,
+    project_context: str | None = None,
 ) -> TestPlan:
     base = plan_checks(analysis, bindings, profile=profiles)
 
@@ -195,7 +196,7 @@ async def build_plan(
     ]
     try:
         raw = await _ask_llm(
-            plan_prompt(summarize_analysis(analysis), src_block, user_intent),
+            plan_prompt(summarize_analysis(analysis), src_block, user_intent, project_context),
             on_thought=on_thought,
         )
         parsed = _extract_json(raw)

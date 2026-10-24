@@ -56,6 +56,7 @@ from app.services.connection_repair import (
 )
 from app.services.ingest import engine_word_guess, extract_connections_async, looks_like_code
 from app.services.orchestrator import build_bindings, introspect_all, profile_focus, run_audit
+from app.services.projects import project_context_for_session
 from app.services.source_filter import profile_summary
 from app.store import repository as repo
 from app.store.db import utcnow_str
@@ -391,12 +392,15 @@ async def handle_turn(
     emit: Any,
     action: str | None = None,
     payload: dict[str, Any] | None = None,
+    project_context: str | None = None,
 ) -> TurnOutcome:
     """Drive one turn of the state machine."""
     out = TurnOutcome()
     ctx = repo.load_session_payload(session_id)
     payload = payload or {}
     notes: list[str] = []
+    if project_context is None:
+        project_context = project_context_for_session(session_id)
 
     # ---- 1. structured handoffs from REST-driven UI ----------------------- #
     if action == "etl_provided" and payload.get("etl_id"):
@@ -514,7 +518,7 @@ async def handle_turn(
     # ---- 5. everything we need: build the plan ---------------------------- #
     out.stage = str(ConversationStage.AWAITING_APPROVAL)
     _persist(session_id, ctx)
-    planned = await _plan(analysis, specs, ctx, session_id, emit, text)
+    planned = await _plan(analysis, specs, ctx, session_id, emit, text, project_context)
     out.reply = (notes[0] + "\n\n" if notes and len(notes) == 1 else "") + planned
     return out
 
@@ -607,6 +611,7 @@ async def _plan(
     session_id: str,
     emit: Any,
     user_intent: str,
+    project_context: str | None = None,
 ) -> str:
     if not specs:
         return (
@@ -629,6 +634,7 @@ async def _plan(
         user_intent=user_intent[:300],
         profiles=profiles,
         on_thought=burst,
+        project_context=project_context,
     )
     burst.close()
 

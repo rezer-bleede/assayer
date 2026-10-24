@@ -129,8 +129,15 @@ async def run_audit(
     result.analysis = analysis
     if emit:
         emit("thought", {"text": "All checks done — writing the report…"})
+    from app.services.projects import project_context_for_session
+
+    project_context = project_context_for_session(session_id) if session_id else None
     result.narrative = await build_report(
-        result, analysis, on_delta=on_delta, on_thought=on_thought
+        result,
+        analysis,
+        on_delta=on_delta,
+        on_thought=on_thought,
+        project_context=project_context,
     )
 
     try:

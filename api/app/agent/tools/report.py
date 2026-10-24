@@ -85,6 +85,7 @@ async def build_report(
     analysis: EtlAnalysis | None = None,
     on_delta: Callable[[str], None] | None = None,
     on_thought: ThoughtCallback | None = None,
+    project_context: str | None = None,
 ) -> str:
     summary = structured_summary(run)
     if not llm_available():
@@ -98,7 +99,7 @@ async def build_report(
     try:
         # the narrative is a page of prose, not a saga — bound it
         return await astream(
-            report_prompt(payload, summary["failures"]),
+            report_prompt(payload, summary["failures"], project_context),
             max_tokens=800,
             on_delta=on_delta,
             on_thought=on_thought,

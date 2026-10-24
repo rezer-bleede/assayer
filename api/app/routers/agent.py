@@ -19,6 +19,7 @@ from app.core.logging import log
 from app.core.routes import SafeAPIRoute
 from app.routers.chat import EventBuffer, handle_turn
 from app.schemas import ChatMessage, ChatRole, ConnectionSpec, Question, RunResult, TestPlan, new_id
+from app.services.projects import project_context_for_session
 from app.store import repository as repo
 
 router = APIRouter(tags=["agent"], route_class=SafeAPIRoute)
@@ -131,8 +132,10 @@ async def _turn(session_id: str, text: str) -> tuple[str, ChatMessage | None]:
     buf = EventBuffer()
     await asyncio.to_thread(repo.ensure_session, session_id)
 
+    project_context = project_context_for_session(session_id)
+
     try:
-        outcome = await handle_turn(session_id, text, emit=buf)
+        outcome = await handle_turn(session_id, text, emit=buf, project_context=project_context)
     except Exception as exc:  # noqa: BLE001
         log.exception("agent turn failed", session_id=session_id)
         raise RuntimeError(f"{type(exc).__name__}: {exc}") from exc
@@ -155,7 +158,7 @@ async def _turn(session_id: str, text: str) -> tuple[str, ChatMessage | None]:
         specs=specs,
         notes=[outcome.reply] if outcome.reply else None,
     )
-    program = await author_program(state, fallback)
+    program = await author_program(state, fallback, project_context)
     assistant = ChatMessage(role=ChatRole.ASSISTANT, content=program)
     repo.append_message(session_id, assistant)
     return program, assistant

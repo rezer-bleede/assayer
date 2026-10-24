@@ -32,19 +32,22 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + "\n…[truncated]"
 
 
-async def author_program(state: dict, fallback: str) -> str:
+async def author_program(state: dict, fallback: str, project_context: str | None = None) -> str:
     """Return a validated model program, or the deterministic fallback."""
     if not settings.openui_author_enabled or not llm_available():
         return fallback
 
+    pc = f"\n\n{project_context}\n" if project_context else ""
     prompt = (
         _system_prompt()
-        + "\n\n## Turn input\n\nSTATE JSON:\n"
+        + pc
+        + "\n## Turn input\n\nSTATE JSON:\n"
         + _clip(json.dumps(state, ensure_ascii=False, default=str), 18_000)
         + "\n\nA valid fallback program for this exact state:\n"
         + _clip(fallback, 10_000)
         + "\n\nWrite the best program for this state. Start with `root = Card(`. "
-        "Output only the program."
+        "Project instructions above shape tone and emphasis; the STATE JSON still "
+        "wins on facts. Output only the program."
     )
 
     try:

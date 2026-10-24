@@ -16,6 +16,19 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** For 204 endpoints: no body to parse. */
+async function reqVoid(path: string, init?: RequestInit): Promise<void> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(parseDetail(body) || `${res.status} ${res.statusText}`);
+  }
+}
+
 export const api = {
   createSession: () => req<{ session_id: string; question?: Question }>('/api/sessions', { method: 'POST', body: '{}' }),
   messages: (sid: string) => req<{ messages: ChatMessage[] }>(`/api/sessions/${sid}/messages`),
@@ -81,6 +94,35 @@ export const api = {
     }),
   run: (runId: string) => req<RunResult>(`/api/runs/${runId}`),
   runs: () => req<{ runs: RunSummary[] }>('/api/runs'),
+  projects: () => req<{ projects: Project[] }>('/api/projects'),
+  createProject: (name: string, instructions = '') =>
+    req<Project>('/api/projects', { method: 'POST', body: JSON.stringify({ name, instructions }) }),
+  updateProject: (id: string, patch: { name?: string; instructions?: string }) =>
+    req<Project>(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteProject: (id: string) => reqVoid(`/api/projects/${id}`, { method: 'DELETE' }),
+  projectDetail: (id: string) => req<ProjectDetail>(`/api/projects/${id}`),
+  projectFiles: (id: string) => req<{ files: ProjectFile[] }>(`/api/projects/${id}/files`),
+  uploadProjectFiles: async (id: string, files: File[]): Promise<{ files: ProjectFile[]; rejected: { name: string; reason: string }[] }> => {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f, f.name));
+    const res = await fetch(`${API_URL}/api/projects/${encodeURIComponent(id)}/files`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(parseDetail(body) || `${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  },
+  deleteProjectFile: (id: string, fileId: string) =>
+    reqVoid(`/api/projects/${id}/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' }),
+  /** File a chat into a project, or unfile it when projectId is null. */
+  moveThread: (threadId: string, projectId: string | null) =>
+    req<{ id: string; projectId: string | null }>('/api/threads/move', {
+      method: 'POST',
+      body: JSON.stringify({ threadId, projectId }),
+    }),
 };
 
 export type FromUrlBody = {
@@ -397,4 +439,25 @@ export type RunSummary = {
   checks: number;
   duration_ms: number | null;
   narrative: string | null;
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  instructions: string;
+  createdAt: string;
+  threadCount?: number;
+  fileCount?: number;
+};
+
+export type ProjectFile = {
+  id: string;
+  name: string;
+  size: number;
+  createdAt?: string;
+};
+
+export type ProjectDetail = Project & {
+  files: ProjectFile[];
+  threads: { id: string; title: string; createdAt: string }[];
 };

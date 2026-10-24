@@ -11,12 +11,15 @@ from app.schemas import (
     EtlAnalysis,
     RunResult,
     TestPlan,
+    new_id,
 )
 from app.store.db import (
     ChatMessageRow,
     CheckResultRow,
     ConnectionRow,
     EtlRow,
+    ProjectFileRow,
+    ProjectRow,
     RunRow,
     SessionRow,
     utcnow_str,
@@ -286,6 +289,7 @@ def list_threads() -> list[dict[str, Any]]:
                 "id": r.id,
                 "title": (r.payload or {}).get("title") or "New audit",
                 "createdAt": r.created_at,
+                "projectId": (r.payload or {}).get("project_id"),
             }
             for r in rows
         ]
@@ -321,3 +325,157 @@ def list_messages(session_id: str, limit: int = 200) -> list[ChatMessage]:
             .all()
         )
         return [ChatMessage.model_validate(r.payload) for r in rows]
+
+
+# --------------------------------------------------------------------------- #
+# projects (ChatGPT/Claude-style grouping: instructions + knowledge files)
+# --------------------------------------------------------------------------- #
+
+
+def save_project(
+    name: str, instructions: str = "", project_id: str | None = None
+) -> dict[str, Any]:
+    pid = project_id or new_id()
+    with write_session() as s:
+        s.add(
+            ProjectRow(
+                id=pid,
+                name=name[:120],
+                instructions=instructions[:8000],
+                created_at=utcnow_str(),
+                payload={},
+            )
+        )
+    return get_project(pid) or {"id": pid, "name": name, "instructions": instructions}
+
+
+def list_projects() -> list[dict[str, Any]]:
+    with write_session() as s:
+        projects = s.query(ProjectRow).order_by(ProjectRow.created_at.desc()).all()
+        counts: dict[str, int] = {}
+        file_counts: dict[str, int] = {}
+        for row in s.query(SessionRow).all():
+            pid = (row.payload or {}).get("project_id")
+            if pid:
+                counts[pid] = counts.get(pid, 0) + 1
+        for f in s.query(ProjectFileRow).all():
+            file_counts[f.project_id] = file_counts.get(f.project_id, 0) + 1
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "instructions": p.instructions,
+                "createdAt": p.created_at,
+                "threadCount": counts.get(p.id, 0),
+                "fileCount": file_counts.get(p.id, 0),
+            }
+            for p in projects
+        ]
+
+
+def get_project(project_id: str) -> dict[str, Any] | None:
+    with write_session() as s:
+        p = s.get(ProjectRow, project_id)
+        if p is None:
+            return None
+        return {
+            "id": p.id,
+            "name": p.name,
+            "instructions": p.instructions,
+            "createdAt": p.created_at,
+        }
+
+
+def update_project(
+    project_id: str, name: str | None = None, instructions: str | None = None
+) -> dict[str, Any] | None:
+    with write_session() as s:
+        p = s.get(ProjectRow, project_id)
+        if p is None:
+            return None
+        if name is not None and name.strip():
+            p.name = name.strip()[:120]
+        if instructions is not None:
+            p.instructions = instructions[:8000]
+    return get_project(project_id)
+
+
+def delete_project(project_id: str) -> bool:
+    """Delete the project; its chats revert to unfiled, its files go with it."""
+    with write_session() as s:
+        p = s.get(ProjectRow, project_id)
+        if p is None:
+            return False
+        for f in s.query(ProjectFileRow).filter(ProjectFileRow.project_id == project_id).all():
+            s.delete(f)
+        for row in s.query(SessionRow).all():
+            payload = dict(row.payload or {})
+            if payload.get("project_id") == project_id:
+                payload.pop("project_id", None)
+                row.payload = payload
+        s.delete(p)
+        return True
+
+
+def add_project_file(project_id: str, name: str, text: str) -> dict[str, Any]:
+    fid = new_id()
+    with write_session() as s:
+        s.add(
+            ProjectFileRow(
+                id=fid,
+                project_id=project_id,
+                name=name[:255],
+                size=len(text.encode("utf-8", "replace")),
+                created_at=utcnow_str(),
+                payload={"text": text},
+            )
+        )
+    return {"id": fid, "name": name, "size": len(text.encode("utf-8", "replace"))}
+
+
+def list_project_files(project_id: str, with_content: bool = False) -> list[dict[str, Any]]:
+    with write_session() as s:
+        rows = (
+            s.query(ProjectFileRow)
+            .filter(ProjectFileRow.project_id == project_id)
+            .order_by(ProjectFileRow.created_at)
+            .all()
+        )
+        out = []
+        for r in rows:
+            item: dict[str, Any] = {
+                "id": r.id,
+                "name": r.name,
+                "size": r.size,
+                "createdAt": r.created_at,
+            }
+            if with_content:
+                item["text"] = (r.payload or {}).get("text", "")
+            out.append(item)
+        return out
+
+
+def delete_project_file(project_id: str, file_id: str) -> bool:
+    with write_session() as s:
+        row = s.get(ProjectFileRow, file_id)
+        if row is None or row.project_id != project_id:
+            return False
+        s.delete(row)
+        return True
+
+
+def get_thread_project_id(session_id: str) -> str | None:
+    ctx = load_session_payload(session_id)
+    pid = ctx.get("project_id")
+    return str(pid) if pid else None
+
+
+def set_thread_project(session_id: str, project_id: str | None) -> dict[str, Any] | None:
+    ensure_session(session_id)
+    ctx = load_session_payload(session_id)
+    if project_id:
+        ctx["project_id"] = project_id
+    else:
+        ctx.pop("project_id", None)
+    update_session_payload(session_id, ctx)
+    return {"id": session_id, "projectId": project_id}

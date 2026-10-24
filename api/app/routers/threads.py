@@ -17,12 +17,18 @@ router = APIRouter(prefix="/api/threads", tags=["threads"], route_class=SafeAPIR
 
 class CreateThreadRequest(BaseModel):
     messages: list[dict[str, Any]] = Field(default_factory=list)
+    projectId: str | None = None
 
 
 class UpdateThreadRequest(BaseModel):
     id: str | None = None
     title: str | None = None
     createdAt: str | int | None = None
+
+
+class MoveThreadRequest(BaseModel):
+    threadId: str
+    projectId: str | None = None
 
 
 def _message(raw: dict[str, Any]) -> ChatMessage:
@@ -60,10 +66,29 @@ def create_thread(req: CreateThreadRequest) -> dict[str, Any]:
     thread_id = new_id()
     repo.ensure_session(thread_id)
     title = _title(req.messages)
-    repo.update_session_payload(thread_id, {"title": title, "stage": "need_etl"})
+    payload: dict[str, Any] = {"title": title, "stage": "need_etl"}
+    if req.projectId and repo.get_project(req.projectId) is not None:
+        payload["project_id"] = req.projectId
+    repo.update_session_payload(thread_id, payload)
     for raw in req.messages:
         repo.append_message(thread_id, _message(raw))
-    return {"id": thread_id, "title": title, "createdAt": utcnow_str()}
+    return {
+        "id": thread_id,
+        "title": title,
+        "createdAt": utcnow_str(),
+        "projectId": payload.get("project_id"),
+    }
+
+
+@router.post("/move")
+def move_thread(req: MoveThreadRequest) -> dict[str, Any]:
+    """File a chat into a project, or unfile it when projectId is null."""
+    if req.projectId is not None and repo.get_project(req.projectId) is None:
+        raise HTTPException(404, "project not found")
+    moved = repo.set_thread_project(req.threadId, req.projectId)
+    if moved is None:
+        raise HTTPException(404, "thread not found")
+    return moved
 
 
 @router.get("/get/{thread_id}")
