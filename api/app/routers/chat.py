@@ -44,6 +44,7 @@ from app.schemas import (
     RunResult,
     RunStatus,
     SourceRequirement,
+    SourceType,
     StreamEvent,
     TestPlan,
     new_id,
@@ -51,6 +52,7 @@ from app.schemas import (
 from app.services.connection_repair import (
     RepairReport,
     list_server_databases,
+    probe,
     probe_attempt,
     repair_connection,
 )
@@ -169,6 +171,13 @@ def _need_etl_question() -> Question:
                 label="Upload source files",
                 help="Select .sql / .py / dbt YAML files, or a whole folder.",
                 preferred=True,
+            ),
+            QuestionOption(
+                kind=QuestionKind.WEB_TARGET,
+                label="Test a web app",
+                help="Run browser checks on an app URL, with optional basic, header, or form-login authentication.",
+                placeholder="https://app.example.com/dashboard",
+                preferred=False,
             ),
             QuestionOption(
                 kind=QuestionKind.PASTE,
@@ -491,6 +500,13 @@ async def handle_turn(
     analysis = repo.get_etl(ctx["etl_id"]) if ctx.get("etl_id") else None
 
     if analysis is None:
+        web_targets = {cid: spec for cid, spec in specs.items() if spec.type == SourceType.WEB}
+        if web_targets:
+            out.stage = str(ConversationStage.AWAITING_APPROVAL)
+            planned = await _plan(None, web_targets, ctx, session_id, emit, text, project_context)
+            out.reply = (notes[0] + "\n\n" if notes and len(notes) == 1 else "") + planned
+            _persist(session_id, ctx)
+            return out
         out.stage = str(ConversationStage.NEED_ETL)
         out.question = _need_etl_question()
         out.reply = _first_line(notes) or (
@@ -556,6 +572,14 @@ async def _absorb_connection(
     the user to confirm, because a guess drawn from a stale ETL hint must not
     quietly become the connection of record.
     """
+    if spec.type == SourceType.WEB:
+        status, _, _ = await asyncio.to_thread(probe, spec)
+        if not status.ok:
+            return f"I couldn't reach the web app at {spec.url}: {status.message or 'connection failed'}."
+        rec = repo.save_connection(spec, session_id)
+        ctx["connection_ids"] = [*ctx.get("connection_ids", []), rec.id]
+        emit("connection.detected", {"connection_id": rec.id, "spec": spec.redacted()})
+        return f"Captured the web app at {spec.url}."
     tables = list(spec.options.get("tables", []))
     result = await repair_connection(
         spec,
@@ -605,7 +629,7 @@ def _persist(session_id: str, ctx: dict) -> None:
 
 
 async def _plan(
-    analysis: EtlAnalysis,
+    analysis: EtlAnalysis | None,
     specs: dict[str, ConnectionSpec],
     ctx: dict,
     session_id: str,
@@ -635,10 +659,13 @@ async def _plan(
         profiles=profiles,
         on_thought=burst,
         project_context=project_context,
+        connections=specs,
     )
     burst.close()
 
     if not plan.checks:
+        if analysis is None:
+            return "I couldn't create UI checks for that target. Check the URL and try again."
         ctx["stage"] = str(ConversationStage.NEED_SOURCES)
         wanted = ", ".join(sorted({*analysis.sources, *analysis.targets}))
         return (
@@ -669,7 +696,7 @@ async def _plan(
                     "id": c.id,
                     "name": c.name,
                     "kind": str(c.kind),
-                    "table": c.table.fqn,
+                    "table": c.table.fqn if c.table else (c.url or "web app"),
                     "column": c.column,
                     "severity": str(c.severity),
                     "rationale": c.rationale,
@@ -681,7 +708,7 @@ async def _plan(
     emit("plan.awaiting_approval", {"run_id": plan.run_id})
 
     top = [
-        f"- {c.name} ({c.severity}) on `{c.table.fqn}`" + (f".{c.column}" if c.column else "")
+        f"- {c.name} ({c.severity}) on `{c.table.fqn if c.table else (c.url or 'web app')}`" + (f".{c.column}" if c.column else "")
         for c in plan.checks[:6]
     ]
     caveat = ""

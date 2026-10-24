@@ -104,3 +104,14 @@ These were real bugs found during integration, each now pinned by a test:
 - `test_chat_events.py` — fire-and-forget event tasks reordered the stream.
 - `test_source_filter.py` — a seed CSV was read whole and a `package-lock.json`
   was parsed as source; data files are now profiled and lock files dropped.
+# Frontend UI testing
+
+UI testing uses the same approval lifecycle as data checks. Unit coverage
+validates URL ingestion, table-less UI check serialization, plan generation,
+read-only parity-query validation, and same-origin navigation enforcement.
+Browser integration tests use a local fixture app and cover page load,
+element-present/text, console/network errors and ignore patterns, UI-to-SQLite
+parity, a click/assert flow, screenshot baseline creation and a changed visual
+baseline. They also exercise title patterns and viewport-specific baselines.
+Skip browser integration tests when Chromium is not installed; keep pure
+planner/security tests runnable without a browser.

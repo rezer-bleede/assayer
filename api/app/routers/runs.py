@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.agent.plan_builder import build_plan
 from app.agent.planner import bind_sources, find_unresolved
+from app.core.config import settings
 from app.core.logging import log
 from app.core.routes import SafeAPIRoute
 from app.schemas import ConnectionSpec, RunResult, RunStatus, TestPlan
@@ -14,6 +17,17 @@ from app.services.orchestrator import introspect_all, profile_focus, run_audit
 from app.store import repository as repo
 
 router = APIRouter(prefix="/api/runs", tags=["runs"], route_class=SafeAPIRoute)
+
+
+@router.get("/{run_id}/artifacts/{check_id}/{name}")
+def get_artifact(run_id: str, check_id: str, name: str) -> FileResponse:
+    root = Path(settings.ui_artifact_dir).resolve()
+    candidate = (root / run_id / check_id / name).resolve()
+    if root not in candidate.parents or candidate.suffix.lower() not in {".png", ".txt", ".html", ".json"}:
+        raise HTTPException(404, "artifact not found")
+    if not candidate.is_file():
+        raise HTTPException(404, "artifact not found")
+    return FileResponse(candidate)
 
 
 class PlanRequest(BaseModel):
@@ -48,7 +62,7 @@ async def create_plan(req: PlanRequest) -> PlanResponse:
     analysis = repo.get_etl(req.etl_id) if req.etl_id else None
     bindings = bind_sources(analysis, connections, introspected) if analysis else []
     profiles = profile_focus(connections, introspected, [(b.schema, b.table) for b in bindings])
-    plan = await build_plan(analysis, bindings, req.user_intent, req.use_llm, profiles=profiles)
+    plan = await build_plan(analysis, bindings, req.user_intent, req.use_llm, profiles=profiles, connections=connections)
     missing = find_unresolved(analysis, bindings)
     if not plan.checks:
         raise HTTPException(
@@ -184,7 +198,7 @@ def export(run_id: str) -> Response:
         w.writerow(
             [
                 r.name,
-                r.table.fqn,
+                r.table.fqn if r.table else (r.url or "web app"),
                 r.column,
                 r.kind,
                 r.severity,

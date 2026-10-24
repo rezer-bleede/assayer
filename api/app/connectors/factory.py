@@ -8,6 +8,9 @@ from app.connectors.base import Connector, ConnectorError
 from app.schemas import ConnectionSpec, SourceType
 
 _REGISTRY: dict[SourceType, str] = {
+    # Registered for the supported-source catalogue; browser targets use
+    # build_browser(), never the SQL Connector interface.
+    SourceType.WEB: "app.connectors.browser:BrowserClient",
     SourceType.POSTGRES: "app.connectors.sqlalchemy_connector:PostgresConnector",
     SourceType.MYSQL: "app.connectors.sqlalchemy_connector:MySQLConnector",
     SourceType.MSSQL: "app.connectors.sqlalchemy_connector:MSSQLConnector",
@@ -35,6 +38,8 @@ def _load(dotted: str) -> type[Connector]:
 
 
 def build_connector(spec: ConnectionSpec) -> Connector:
+    if spec.type == SourceType.WEB:
+        raise ConnectorError("web targets use build_browser(), not a SQL connector")
     dotted = _REGISTRY.get(spec.type)
     if dotted is None:
         raise ConnectorError(f"unsupported source type: {spec.type}")
@@ -52,4 +57,10 @@ def build_connector(spec: ConnectionSpec) -> Connector:
         raise ConnectorError(f"cannot build connector for '{spec.type}': {exc}") from exc
 
 
-__all__ = ["build_connector", "SUPPORTED_SOURCES", "Connector", "ConnectorError"]
+def build_browser(spec: ConnectionSpec):
+    if spec.type != SourceType.WEB:
+        raise ConnectorError("browser target must have type 'web'")
+    from app.connectors.browser import BrowserClient
+
+    return BrowserClient(spec)
+__all__ = ["build_connector", "build_browser", "SUPPORTED_SOURCES", "Connector", "ConnectorError"]

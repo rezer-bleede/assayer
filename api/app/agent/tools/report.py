@@ -18,7 +18,7 @@ def structured_summary(run: RunResult) -> dict:
         grouped.setdefault(str(r.severity), []).append(
             {
                 "check": r.name,
-                "table": r.table.fqn,
+                "table": r.table.fqn if r.table else (r.url or "web app"),
                 "column": r.column,
                 "observed": r.observed,
                 "expected": r.expected,
@@ -53,7 +53,7 @@ def _fallback_narrary(run: RunResult) -> str:
         lines += ["", "**What broke**"]
         for r in failures[:10]:
             lines.append(
-                f"- `{r.table.fqn}`{f'.{r.column}' if r.column else ''} — "
+                f"- `{r.table.fqn if r.table else (r.url or 'web app')}`{f'.{r.column}' if r.column else ''} — "
                 f"{r.name}: observed `{r.observed}`, expected `{r.expected}`"
             )
     errors = [r for r in run.results if r.status == CheckStatus.ERROR]
@@ -71,7 +71,7 @@ def _tie_to_etl(run: RunResult, analysis: EtlAnalysis | None) -> list[str]:
         return []
     hints: list[str] = []
     failed_tables = {
-        r.table.fqn.split(".")[-1].lower() for r in run.results if r.status == CheckStatus.FAILED
+        r.table.fqn.split(".")[-1].lower() for r in run.results if r.status == CheckStatus.FAILED and r.table
     }
     for t in analysis.transformations:
         target = (t.target or "").split(":")[-1].split(".")[-1].lower()

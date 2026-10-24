@@ -42,6 +42,8 @@ def _clean_db(raw: str | None) -> str | None:
 
 
 _SCHEME_MAP = {
+    "http": SourceType.WEB,
+    "https": SourceType.WEB,
     "postgresql": SourceType.POSTGRES,
     "postgres": SourceType.POSTGRES,
     "mysql": SourceType.MYSQL,
@@ -175,6 +177,22 @@ def parse_url(url: str) -> ConnectionSpec | None:
     if not m:
         return None
     scheme = m.group("scheme").lower()
+    if scheme in {"http", "https"}:
+        from urllib.parse import unquote, urlparse
+
+        parsed = urlparse(url.strip().rstrip(".,;"))
+        if not parsed.hostname or parsed.hostname.lower() in {"github.com", "gitlab.com", "bitbucket.org"}:
+            return None
+        hostname = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+        netloc = f"{hostname}:{parsed.port}" if parsed.port else hostname
+        return ConnectionSpec(
+            type=SourceType.WEB,
+            name=f"web-{parsed.hostname}",
+            url=f"{parsed.scheme}://{netloc}{parsed.path}".rstrip("/"),
+            auth_mode="basic" if parsed.username or parsed.password else "none",
+            auth_username=unquote(parsed.username or "") or None,
+            auth_password=unquote(parsed.password or "") or None,
+        )
     st = _SCHEME_MAP.get(scheme)
     if st is None:
         return None

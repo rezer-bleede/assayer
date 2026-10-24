@@ -77,6 +77,8 @@ def _literal(value: float | str | None) -> str:
 
 
 def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
+    if check.table is None:
+        raise UnsafeSQLError("SQL check is missing a table reference")
     """Return (sql, params). `expected` is computed by the runner from the row."""
     t = conn.quote_table(check.table.schema_, check.table.name)
     col = f'"{check.column}"' if check.column else None
@@ -180,6 +182,8 @@ def compile_check(check: CheckSpec, conn: Connector) -> tuple[str, dict]:
 
 
 def sample_failure_sql(check: CheckSpec, conn: Connector) -> str:
+    if check.table is None:
+        raise UnsafeSQLError("SQL check is missing a table reference")
     """SQL that returns a few offending rows for the UI sample table."""
     t = conn.quote_table(check.table.schema_, check.table.name)
     col = check.column

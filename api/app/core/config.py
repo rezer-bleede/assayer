@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     run_max_row_sample: int = 20
     run_max_concurrency: int = 4
 
+    # --- browser UI checks ---
+    ui_enabled: bool = True
+    ui_check_timeout_seconds: int = 30
+    ui_nav_timeout_seconds: int = 15
+    ui_max_steps: int = 25
+    ui_max_pages: int = 12
+    ui_artifact_dir: str = "/tmp/qualitest-ui-artifacts"
+    ui_allow_private_hosts: bool = True
+    ui_visual_default_tolerance: float = 0.005
+
     # --- connection repair: auto-retry a failed connection with better guesses ---
     # The deterministic ladder is free; the LLM rounds cost tokens and seconds,
     # so both the attempt count and the wall clock are bounded. "As many tries

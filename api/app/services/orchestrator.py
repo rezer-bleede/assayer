@@ -30,6 +30,9 @@ def introspect_all(
 ) -> dict[str, list[dict]]:
     introspected: dict[str, list[dict]] = {}
     for cid, spec in connections.items():
+        from app.schemas import SourceType
+        if spec.type == SourceType.WEB:
+            continue
         if emit:
             where = spec.host or spec.name
             emit("thought", {"text": f"Connecting to {where}…"})

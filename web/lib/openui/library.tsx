@@ -6,6 +6,7 @@ import { useThreadList } from '@openuidev/react-headless';
 import { openuiChatLibrary } from '@openuidev/react-ui/genui-lib';
 import { z } from 'zod/v4';
 import {
+  API_URL,
   api,
   connectFromUrlStream,
   repairPatch,
@@ -21,7 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 
 const tone = z.enum(['neutral', 'success', 'warning', 'danger']);
-const numOrStr = z.union([z.string(), z.number()]).nullable();
+const numOrStr = z.union([z.string(), z.number(), z.record(z.string(), z.unknown())]).nullable();
 
 const noticeSchema = z.object({
   title: z.string().nullable().optional(),
@@ -112,7 +113,7 @@ const Welcome = defineComponent({
 });
 
 const intakeOptionSchema = z.object({
-  kind: z.enum(['git_url', 'file_upload', 'connection']),
+  kind: z.enum(['git_url', 'file_upload', 'connection', 'web_target']),
   label: z.string(),
   help: z.string().nullable().optional(),
   placeholder: z.string().nullable().optional(),
@@ -158,6 +159,17 @@ function IntakeView({ props }: { props: z.infer<typeof intakeSchema> }) {
   const [url, setUrl] = useState('');
   const [ref, setRef] = useState('');
   const [token, setToken] = useState('');
+  const [webAuthMode, setWebAuthMode] = useState<'none' | 'basic' | 'login'>('none');
+  const [webUsername, setWebUsername] = useState('');
+  const [webPassword, setWebPassword] = useState('');
+  const [headerName, setHeaderName] = useState('Authorization');
+  const [headerValue, setHeaderValue] = useState('');
+  const [allowedOrigins, setAllowedOrigins] = useState('');
+  const [loginPath, setLoginPath] = useState('/login');
+  const [userSelector, setUserSelector] = useState('input[name=username]');
+  const [passSelector, setPassSelector] = useState('input[type=password]');
+  const [submitSelector, setSubmitSelector] = useState('button[type=submit]');
+  const [successSelector, setSuccessSelector] = useState('');
   const [selection, setSelection] = useState<FileSelection | null>(null);
   const [status, setStatus] = useState<IntakeStatus>({ busy: false });
   const dirRef = useRef<HTMLInputElement>(null);
@@ -229,9 +241,44 @@ function IntakeView({ props }: { props: z.infer<typeof intakeSchema> }) {
     );
   };
 
+  const submitWebTarget = async () => {
+    if (!threadId) return setStatus({ busy: false, error: 'No active thread yet.' });
+    setStatus({ busy: true });
+    try {
+      const target = new URL(url.trim());
+      const headers = headerValue.trim() ? { [headerName.trim() || 'Authorization']: headerValue.trim() } : {};
+      const res = await api.testConnection({
+        type: 'web',
+        name: target.hostname,
+        url: target.toString(),
+        auth_mode: webAuthMode,
+        auth_username: webUsername || null,
+        auth_password: webPassword || null,
+        headers,
+        options: {
+          ...(allowedOrigins.trim() ? { allowed_origins: allowedOrigins.split(',').map((origin) => origin.trim()).filter(Boolean) } : {}),
+          ...(webAuthMode === 'login'
+            ? { login_path: loginPath, user_selector: userSelector, pass_selector: passSelector, submit_selector: submitSelector, success_selector: successSelector || null }
+            : {}),
+        },
+      }, threadId);
+      if (!res.status.ok || !res.connection_id) {
+        setStatus({ busy: false, error: res.status.message ?? 'Could not reach the web app.' });
+        return;
+      }
+      setStatus({ busy: false, ok: res.status.message ?? 'Web app connected.' });
+      setWebPassword('');
+      setHeaderValue('');
+      void trigger('The web app is connected.');
+    } catch (e) {
+      setStatus({ busy: false, error: (e as Error).message });
+    }
+  };
+
   const submit = () => {
     if (option.kind === 'git_url') void submitRepo();
     else if (option.kind === 'file_upload') void submitFiles();
+    else if (option.kind === 'web_target') void submitWebTarget();
     else void submitConnection();
   };
 
@@ -239,7 +286,7 @@ function IntakeView({ props }: { props: z.infer<typeof intakeSchema> }) {
     !status.busy &&
     ((option.kind === 'git_url' && url.trim().length > 5) ||
       (option.kind === 'file_upload' && (selection?.files.length ?? 0) > 0) ||
-      (option.kind === 'connection' && url.trim().length > 5));
+      ((option.kind === 'connection' || option.kind === 'web_target') && url.trim().length > 5));
 
   return (
     <form
@@ -358,12 +405,47 @@ function IntakeView({ props }: { props: z.infer<typeof intakeSchema> }) {
           </div>
         )}
 
+        {option.kind === 'web_target' && (
+          <div className="space-y-2">
+            <input className="field" type="url" required placeholder={option.placeholder ?? 'https://app.example.com'} value={url} onChange={(e) => setUrl(e.target.value)} disabled={status.busy} />
+            <label className="block text-[11.5px] text-muted">Authentication
+              <select className="field mt-1" value={webAuthMode} onChange={(e) => setWebAuthMode(e.target.value as typeof webAuthMode)} disabled={status.busy}>
+                <option value="none">No authentication</option>
+                <option value="basic">HTTP basic authentication</option>
+                <option value="login">Form login</option>
+              </select>
+            </label>
+            {webAuthMode !== 'none' && <div className="grid gap-2 sm:grid-cols-2">
+              <input className="field" autoComplete="username" placeholder="Username" value={webUsername} onChange={(e) => setWebUsername(e.target.value)} disabled={status.busy} />
+              <input className="field" type="password" autoComplete="current-password" placeholder="Password (not sent in chat)" value={webPassword} onChange={(e) => setWebPassword(e.target.value)} disabled={status.busy} />
+            </div>}
+            {webAuthMode === 'none' && <div className="grid gap-2 sm:grid-cols-[1fr_2fr]">
+              <input className="field" placeholder="Optional header name" value={headerName} onChange={(e) => setHeaderName(e.target.value)} disabled={status.busy} />
+              <input className="field" type="password" placeholder="Optional header value" value={headerValue} onChange={(e) => setHeaderValue(e.target.value)} disabled={status.busy} />
+            </div>}
+            {webAuthMode === 'login' && <details className="rounded-lg border p-2 text-[11.5px] text-muted"><summary className="cursor-pointer">Login form selectors</summary>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <input className="field" placeholder="Login path" value={loginPath} onChange={(e) => setLoginPath(e.target.value)} disabled={status.busy} />
+                <input className="field" placeholder="Username selector" value={userSelector} onChange={(e) => setUserSelector(e.target.value)} disabled={status.busy} />
+                <input className="field" placeholder="Password selector" value={passSelector} onChange={(e) => setPassSelector(e.target.value)} disabled={status.busy} />
+                <input className="field" placeholder="Submit selector" value={submitSelector} onChange={(e) => setSubmitSelector(e.target.value)} disabled={status.busy} />
+                <input className="field sm:col-span-2" placeholder="Optional selector visible after login" value={successSelector} onChange={(e) => setSuccessSelector(e.target.value)} disabled={status.busy} />
+              </div>
+            </details>}
+            <details className="rounded-lg border p-2 text-[11.5px] text-muted"><summary className="cursor-pointer">Additional origins</summary>
+              <input className="field mt-2" placeholder="https://cdn.example.com, https://api.example.com" value={allowedOrigins} onChange={(e) => setAllowedOrigins(e.target.value)} disabled={status.busy} />
+              <p className="mt-1">Only add origins the app needs for assets or API calls. Browser flows remain constrained to the app origin.</p>
+            </details>
+            <p className="text-[11px] text-muted">Credentials are sent directly to the API and kept out of chat messages.</p>
+          </div>
+        )}
+
         {status.ok && <p className="text-[12.5px] text-pass">{status.ok}</p>}
         {status.error && <p className="text-[12.5px] text-fail">{status.error}</p>}
 
         <div className="flex items-center gap-2">
           <button type="submit" className="btn-primary" disabled={!canSubmit}>
-            {status.busy ? 'Working…' : option.kind === 'connection' ? 'Connect' : option.kind === 'file_upload' ? 'Upload & analyze' : 'Analyze repository'}
+            {status.busy ? 'Working…' : option.kind === 'connection' || option.kind === 'web_target' ? 'Connect' : option.kind === 'file_upload' ? 'Upload & analyze' : 'Analyze repository'}
           </button>
           {props.skipAllowed && (
             <button type="button" className="btn-ghost" onClick={() => trigger('skip')} disabled={status.busy}>
@@ -389,6 +471,11 @@ const planCheckSchema = z.object({
   name: z.string(),
   kind: z.string(),
   table: z.string(),
+  url: z.string().nullable().optional(),
+  selector: z.string().nullable().optional(),
+  expected: z.string().nullable().optional(),
+  steps: z.array(z.object({ action: z.string(), selector: z.string().nullable().optional(), value: z.string().nullable().optional() })).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
   column: z.string().nullable().optional(),
   severity: z.enum(['blocker', 'critical', 'warning', 'info']),
   rationale: z.string().nullable().optional(),
@@ -457,11 +544,14 @@ function PlanView({ props }: { props: z.infer<typeof planSchema> }) {
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-[13px] font-medium">{c.name}</span>
                 <code className="font-mono text-[11px] text-muted">
-                  {c.table}
+                  {c.url || c.table}
                   {c.column ? `.${c.column}` : ''}
                 </code>
               </div>
               {c.rationale && <p className="mt-0.5 text-[12px] leading-snug text-muted">{c.rationale}</p>}
+              {c.kind === 'flow' && <p className="mt-1 text-[11.5px] text-warn">This approved check will interact with the app.</p>}
+              {c.kind === 'visual_diff' && c.params?.rebaseline === true && <p className="mt-1 text-[11.5px] text-warn">This approved check will replace the screenshot baseline.</p>}
+              {!!c.steps?.length && <ol className="mt-1 list-inside list-decimal text-[11px] text-muted">{c.steps.map((step, i) => <li key={i}>{step.action}{step.selector ? ` ${step.selector}` : ''}{step.value ? ` → ${step.value}` : ''}</li>)}</ol>}
             </div>
             <span className="chip shrink-0 bg-muted/8 text-muted">{c.kind}</span>
           </li>
@@ -492,6 +582,8 @@ const checkResultSchema = z.object({
   name: z.string(),
   kind: z.string(),
   table: z.string(),
+  url: z.string().nullable().optional(),
+  artifacts: z.array(z.string()).optional(),
   column: z.string().nullable().optional(),
   severity: z.string(),
   status: z.enum(['pending', 'running', 'passed', 'failed', 'error', 'skipped']),
@@ -573,20 +665,32 @@ function ReportView({ props }: { props: z.infer<typeof reportSchema> }) {
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <span className="text-[13px] font-medium">{r.name}</span>
                     <code className="font-mono text-[11px] text-muted">
-                      {r.table}
+                      {r.url || r.table}
                       {r.column ? `.${r.column}` : ''}
                     </code>
                   </div>
                   <p className="mt-0.5 text-[12px] text-muted">{r.message}</p>
                 </div>
                 <div className="shrink-0 text-right text-[11px] text-muted tabular-nums">
-                  <div>obs: {String(r.observed ?? '—')}</div>
+                  <div>obs: {typeof r.observed === 'object' && r.observed ? JSON.stringify(r.observed) : String(r.observed ?? '—')}</div>
                   <div>exp: {String(r.expected ?? '—')}</div>
                 </div>
               </button>
               {isOpen && (
                 <div className="border-t bg-ink/[0.03] px-4 py-2 text-[11.5px] text-muted dark:bg-white/[0.04]">
                   {r.failedRows ? `${r.failedRows.toLocaleString()} failing row(s).` : 'No failing rows.'}
+                  {r.kind === 'flow' && <p className="mt-1">This approved check interacted with the app.</p>}
+                  {r.artifacts?.filter((a) => a.endsWith('.png')).map((artifact) => {
+                    const name = artifact.split('/').pop();
+                    const href = `${API_URL}/api/runs/${encodeURIComponent(props.runId)}/artifacts/${encodeURIComponent(r.checkId)}/${encodeURIComponent(name ?? '')}`;
+                    return <a key={artifact} href={href} target="_blank" rel="noreferrer" className="mt-2 block"><img src={href} alt={`${r.name} screenshot`} className="max-h-64 rounded-md border" /></a>;
+                  })}
+                  {r.kind === 'visual_diff' && typeof r.observed === 'number' && (
+                    <div className="mt-2 max-w-xs">
+                      <div className="mb-1 flex justify-between"><span>Visual difference</span><span>{(r.observed * 100).toFixed(2)}%</span></div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted/15"><div className="h-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, r.observed * 100))}%` }} /></div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

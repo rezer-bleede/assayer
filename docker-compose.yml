@@ -113,8 +113,10 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
+      UI_ARTIFACT_DIR: /data/ui-artifacts
     volumes:
       - ./api:/app
+      - ui-artifacts:/data/ui-artifacts
       # sample ETL the agent (and the test suite) can read
       - ./examples:/app/examples:ro
       # the demo dataset the stack seeds, so the test suite can guard it
@@ -150,8 +152,10 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
+      UI_ARTIFACT_DIR: /data/ui-artifacts
     volumes:
       - ./api:/app
+      - ui-artifacts:/data/ui-artifacts
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -185,6 +189,7 @@ services:
       - "${WEB_PORT:-3010}:3000"
 
 volumes:
+  ui-artifacts:
   pgdata:
   redisdata:
   ollama:

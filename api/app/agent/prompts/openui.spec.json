@@ -346,15 +346,15 @@
       "description": "Short status, explanation, welcome text or fallback answer. Use actions for suggested next messages."
     },
     "IntakeCard": {
-      "signature": "IntakeCard(title: string, prompt: string, options: {kind: \"git_url\" | \"file_upload\" | \"connection\", label: string, help?: string, placeholder?: string, requirementKey?: string, tables?: string[], targetTables?: string[], preferred?: boolean}[], skipAllowed?: boolean)",
+      "signature": "IntakeCard(title: string, prompt: string, options: {kind: \"git_url\" | \"file_upload\" | \"connection\" | \"web_target\", label: string, help?: string, placeholder?: string, requirementKey?: string, tables?: string[], targetTables?: string[], preferred?: boolean}[], skipAllowed?: boolean)",
       "description": "Interactive intake form for a git repository, project upload, or database connection. It performs the REST action itself and then continues the conversation."
     },
     "PlanCard": {
-      "signature": "PlanCard(runId: string, summary?: string, checks: {id: string, name: string, kind: string, table: string, column?: string, severity: \"blocker\" | \"critical\" | \"warning\" | \"info\", rationale?: string}[], missingTables?: string[], followUps?: string[])",
+      "signature": "PlanCard(runId: string, summary?: string, checks: {id: string, name: string, kind: string, table: string, url?: string, selector?: string, expected?: string, steps?: {action: string, selector?: string, value?: string}[], params?: Record<string, any>, column?: string, severity: \"blocker\" | \"critical\" | \"warning\" | \"info\", rationale?: string}[], missingTables?: string[], followUps?: string[])",
       "description": "Generated test plan with severity filters and Run/Regenerate actions."
     },
     "AuditReport": {
-      "signature": "AuditReport(runId: string, score: number, durationMs?: number, summary?: string, counts: {passed: number, failed: number, errored: number, skipped: number}, checks: {checkId: string, name: string, kind: string, table: string, column?: string, severity: string, status: \"pending\" | \"running\" | \"passed\" | \"failed\" | \"error\" | \"skipped\", observed?: string | number, expected?: string | number, failedRows?: number, message?: string}[], followUps?: string[])",
+      "signature": "AuditReport(runId: string, score: number, durationMs?: number, summary?: string, counts: {passed: number, failed: number, errored: number, skipped: number}, checks: {checkId: string, name: string, kind: string, table: string, url?: string, artifacts?: string[], column?: string, severity: string, status: \"pending\" | \"running\" | \"passed\" | \"failed\" | \"error\" | \"skipped\", observed?: string | number | Record<string, any>, expected?: string | number | Record<string, any>, failedRows?: number, message?: string}[], followUps?: string[])",
       "description": "Final quality report with score, counts, and expandable check results."
     },
     "EtlCard": {
@@ -4442,7 +4442,8 @@
                   "enum": [
                     "git_url",
                     "file_upload",
-                    "connection"
+                    "connection",
+                    "web_target"
                   ]
                 },
                 "label": {
@@ -4529,6 +4530,58 @@
                 },
                 "table": {
                   "type": "string"
+                },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "selector": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "expected": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "steps": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string"
+                      },
+                      "selector": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "value": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "action"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "params": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
                 },
                 "column": {
                   "type": [
@@ -4644,6 +4697,18 @@
                 "table": {
                   "type": "string"
                 },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "artifacts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
                 "column": {
                   "type": [
                     "string",
@@ -4665,17 +4730,51 @@
                   ]
                 },
                 "observed": {
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "expected": {
-                  "type": [
-                    "string",
-                    "number",
-                    "null"
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "failedRows": {

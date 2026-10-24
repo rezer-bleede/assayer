@@ -558,6 +558,31 @@ def probe(
     matched: list[str] = []
     unmatched: list[str] = []
     declared = list(tables or [])
+    if spec.type == SourceType.WEB:
+        import time
+
+        from app.connectors.factory import build_browser
+
+        start = time.perf_counter()
+        try:
+            with build_browser(spec) as browser:
+                result = browser.probe()
+            status = ConnectionStatus(
+                ok=bool(result.get("ok")), type=spec.type, name=spec.name,
+                latency_ms=round((time.perf_counter() - start) * 1000, 2),
+                message=(
+                    f"loaded {result['url']} — {result['title'] or 'untitled page'}"
+                    if result.get("ok") else f"web target returned HTTP {result.get('status')}"
+                ),
+            )
+        except Exception as exc:
+            status = ConnectionStatus(
+                ok=False, type=spec.type, name=spec.name,
+                latency_ms=round((time.perf_counter() - start) * 1000, 2),
+                message=str(exc)[:400],
+            )
+        return status, matched, unmatched
+
     conn = build_connector(spec)
     try:
         status = conn.test()

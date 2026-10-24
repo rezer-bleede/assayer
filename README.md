@@ -45,6 +45,8 @@ Provide your data connection details and ETL code/script — the agent figures o
   </tr>
 </table>
 
+**Frontend UI checks:** paste a web-app URL to add browser-based end-to-end checks alongside data audits. The agent can check route loading, visible elements, console/network errors, UI values against warehouse queries, browser flows, and screenshot drift.
+
 ## Quick start
 
 ```bash
@@ -231,6 +233,8 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
 6. **Execute** — each check compiles to a single aggregate `SELECT`, re-validated as read-only immediately before running.
 7. **Report** — weighted quality score (0–100) broken down by severity, pass/fail table, failing-row samples, and a narrative tying failures back to the transformation that caused them.
 
+   Web targets use headless Playwright Chromium. Their approved plans include discovered same-origin routes, element presence, console/network health, screenshot baselines, and navigation flows. Add a target by choosing **Test a web app** or pasting an app URL (for example `http://host.docker.internal:3000`) into chat. The web-target form supports HTTP Basic auth, custom headers, selector-configured form login, and an explicit allowlist for cross-origin assets/API requests; top-level flows remain on the app origin. Credentials are sent to the API rather than through chat. UI-to-warehouse parity checks can be added with a selector and read-only scalar query. Flow checks may interact with application state; review the plan before approving.
+
 ---
 
 ## Supported data sources
@@ -246,6 +250,7 @@ you paste  ──▶  ingest ──▶  parse ETL ──▶  profile sources ─
 | BigQuery | service-account JSON |
 | Databricks | SQL warehouse via `http_path` + token |
 | S3 / local CSV, JSON, Parquet | DuckDB-backed, treated as tables |
+| Web applications | Playwright Chromium: route load, visible elements, console/network errors, UI-vs-query values, flows, visual baselines |
 
 Add another by subclassing `Connector` and registering it in `api/app/connectors/factory.py` — planning, execution and UI are source-agnostic.
 
@@ -395,7 +400,9 @@ make clean    # stop and drop volumes
 
 ## Safety
 
-- All probes are single `SELECT`s, re-validated immediately before execution (`assert_readonly`), and connections are opened read-only.
+- Data probes are single `SELECT`s, re-validated immediately before execution (`assert_readonly`), and database connections are opened read-only.
+- Browser navigation is limited to the approved origin by default. Flow checks can click, fill, or submit forms; those steps are shown in the plan and run only after approval.
+- Browser screenshots and event logs are retained in the `ui-artifacts` volume and are available from run reports.
 - Credentials are `SecretStr`; `redacted()` is the only serialisation path.
 - Sample-row capture is capped (`RUN_MAX_ROW_SAMPLE`) and best-effort.
 - A failing check marks itself `error` — it never aborts the run or the others.
@@ -418,6 +425,12 @@ See `.env.example`. Key knobs:
 | `LLM_MAX_RETRIES` | 0 | retries after the first attempt (raise for a flaky hosted endpoint) |
 | `CORS_ORIGINS` | `*` | restrict in production |
 | `RUN_MAX_CONCURRENCY` | 4 | concurrent checks per run |
+| `UI_ENABLED` | true | enable Playwright browser checks |
+| `UI_CHECK_TIMEOUT_SECONDS` | 30 | per-action browser timeout |
+| `UI_MAX_STEPS` | 25 | maximum steps in an approved browser flow |
+| `UI_MAX_PAGES` | 12 | maximum same-origin routes discovered for a plan |
+| `UI_ALLOW_PRIVATE_HOSTS` | true | allow app URLs on private networks (metadata IPs remain blocked) |
+| `UI_VISUAL_DEFAULT_TOLERANCE` | 0.005 | accepted pixel-difference fraction for visual checks |
 | `INTAKE_CODE_MAX_BYTES` | 131072 | per-file cap for code/config that gets parsed |
 | `INTAKE_DATA_MAX_BYTES` | 8000000 | per-file cap for data files that get profiled |
 | `INTAKE_TOTAL_MAX_BYTES` | 4000000 | total source text kept for lineage |

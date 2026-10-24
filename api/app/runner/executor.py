@@ -18,6 +18,7 @@ from app.runner.compiler import (
     sample_failure_sql,
     severity_weight,
 )
+from app.runner.ui_checks import execute_ui_checks
 from app.schemas import (
     CheckResult,
     CheckSpec,
@@ -26,6 +27,7 @@ from app.schemas import (
     QualityScore,
     RunResult,
     RunStatus,
+    SourceType,
     TestPlan,
 )
 
@@ -68,6 +70,8 @@ class TestRunner:
         t0 = time.perf_counter()
         result = RunResult(id=run_id, status=RunStatus.RUNNING, plan=plan, started_at=started)
         checks = plan.checks[: settings.run_max_checks]
+        ui_checks = [c for c in checks if c.source_id and self._conns.get(c.source_id) and self._conns[c.source_id].type == SourceType.WEB]
+        sql_checks = [c for c in checks if c not in ui_checks]
         sem = asyncio.Semaphore(settings.run_max_concurrency)
 
         await self._emit("run.started", {"run_id": run_id, "checks": len(checks)})
@@ -91,9 +95,22 @@ class TestRunner:
                 )
                 return r
 
-        results = await asyncio.gather(*(run_one(c) for c in checks))
-        result.results = list(results)
-        result.score = self._score(results)
+        sql_results, ui_results = await asyncio.gather(
+            asyncio.gather(*(run_one(c) for c in sql_checks)),
+            execute_ui_checks(ui_checks, self._conns, run_id),
+        )
+        by_id = {r.check_id: r for r in [*sql_results, *ui_results]}
+        result.results = [by_id[c.id] for c in checks if c.id in by_id]
+        for ui_result in ui_results:
+            await self._emit("check.completed", {
+                "run_id": run_id, "check_id": ui_result.check_id,
+                "name": ui_result.name, "status": str(ui_result.status),
+                "severity": str(ui_result.severity), "observed": ui_result.observed,
+                "expected": ui_result.expected, "message": ui_result.message,
+                "duration_ms": ui_result.duration_ms, "artifacts": ui_result.artifacts,
+                "url": ui_result.url,
+            })
+        result.score = self._score(result.results)
         result.duration_ms = round((time.perf_counter() - t0) * 1000, 2)
         result.finished_at = datetime.now(UTC)
         result.status = RunStatus.COMPLETED
@@ -132,6 +149,8 @@ class TestRunner:
             severity=check.severity,
         )
         try:
+            if check.table is None:
+                raise ConnectorError("non-browser check has no table reference")
             conn = self._connector(check.table.source_id)
             sql, params = compile_check(check, conn)
 
@@ -181,6 +200,8 @@ class TestRunner:
     def _evaluate(
         self, base: CheckResult, check: CheckSpec, row: dict, expected_counts: dict[str, int]
     ) -> None:
+        if check.table is None:
+            raise ConnectorError("SQL check is missing a table reference")
         kind = str(check.kind)
         total = float(row.get("total") or row.get("row_count") or 0) or 1.0
 

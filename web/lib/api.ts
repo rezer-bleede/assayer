@@ -36,10 +36,10 @@ export const api = {
   sources: () => req<{ sources: SourceKind[]; fields_by_type: Record<string, string[]> }>(
     '/api/connections/sources',
   ),
-  testConnection: (spec: Record<string, unknown>) =>
+  testConnection: (spec: Record<string, unknown>, session_id?: string | null) =>
     req<ConnectResponse>(
       '/api/connections/test',
-      { method: 'POST', body: JSON.stringify({ spec, persist: true }) },
+      { method: 'POST', body: JSON.stringify({ spec, session_id, persist: true }) },
     ),
   /** Answer a datasource question. Credentials go over REST, never chat history. */
   connectFromUrl: (body: {

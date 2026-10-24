@@ -61,6 +61,8 @@ def node_profile(state: AgentState, emit=make_emitter([])) -> AgentState:
     profiles: dict[str, dict] = {}
 
     for cid, spec in state["connections"].items():
+        if str(spec.type) == "web":
+            continue
         data = introspect_source(spec, max_tables=40)
         if data.get("ok"):
             introspected[cid] = data.get("tables", [])
@@ -119,6 +121,7 @@ async def node_plan(state: AgentState, emit=make_emitter([])) -> AgentState:
         bindings,
         user_intent=state.get("user_intent"),
         use_llm=llm_available(),
+        connections=state.get("connections", {}),
     )
     emit(
         "plan.ready",
@@ -130,7 +133,8 @@ async def node_plan(state: AgentState, emit=make_emitter([])) -> AgentState:
                     "id": c.id,
                     "name": c.name,
                     "kind": str(c.kind),
-                    "table": c.table.fqn,
+                    "table": c.table.fqn if c.table else (c.url or "web app"),
+                    "url": c.url,
                     "column": c.column,
                     "severity": str(c.severity),
                     "rationale": c.rationale,

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from app.connectors.factory import SUPPORTED_SOURCES, build_connector
 from app.core.logging import log
 from app.core.routes import SafeAPIRoute
-from app.schemas import ConnectionSpec, ConnectionStatus, RepairReport
+from app.schemas import ConnectionSpec, ConnectionStatus, RepairReport, SourceType
 from app.services.connection_repair import (
     RepairResult,
     list_server_databases,
@@ -55,6 +55,7 @@ def list_sources() -> dict[str, Any]:
     return {
         "sources": SUPPORTED_SOURCES,
         "fields_by_type": {
+            "web": ["url", "auth_mode", "auth_username", "auth_password", "headers"],
             "postgres": ["host", "port", "database", "schema_", "username", "password"],
             "mysql": ["host", "port", "database", "username", "password"],
             "clickhouse": ["host", "port", "database", "username", "password"],
@@ -144,6 +145,8 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResponse:
     connection_id = (
         repo.save_connection(spec, req.session_id).id if (status.ok and req.persist) else None
     )
+    if connection_id:
+        repo.bind_connection(req.session_id, connection_id, req.requirement_key)
     return TestConnectionResponse(
         connection_id=connection_id,
         status=status,
@@ -201,6 +204,12 @@ async def connect_from_url(req: FromUrlRequest, request: Request) -> Any:
     if not specs:
         raise HTTPException(422, _url_diagnosis(req.url))
     given = specs[0]
+    if given.type == SourceType.WEB:
+        status, _, _ = await asyncio.to_thread(probe, given)
+        connection_id = repo.save_connection(given, req.session_id).id if status.ok else None
+        if connection_id:
+            repo.bind_connection(req.session_id, connection_id, req.requirement_key)
+        return TestConnectionResponse(connection_id=connection_id, status=status, spec=given.redacted())
     tables = req.tables or list(given.options.get("tables", []))
     spec = _with_options(given, tables, req.target_tables, req.requirement_key)
     hints = _requirement_hints(req.session_id, req.requirement_key)

@@ -43,6 +43,7 @@ dev = [
     "mypy>=1.11",
     "aiosqlite>=0.20",
 ]
+ui = ["playwright>=1.47", "pillow>=10.4", "numpy>=2.1", "regex>=2024.11"]
 
 [build-system]
 requires = ["hatchling"]

@@ -24,13 +24,18 @@ COPY app ./app
 # PIP_DEFAULT_TIMEOUT/RETRIES matter: the duckdb wheel is ~18 MB and a flaky
 # read from PyPI otherwise fails the whole build.
 RUN pip install --upgrade pip setuptools wheel \
-    && pip install --prefer-binary --timeout 120 --retries 8 -e ".[mysql,s3,dev]"
+    && pip install --prefer-binary --timeout 120 --retries 8 -e ".[mysql,s3,dev,ui]"
+
+RUN python -m playwright install-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 # the clone workdir must be writable by the unprivileged app user
 RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /tmp/qualitest-repos \
-    && chown -R appuser:appuser /tmp/qualitest-repos /app
+    && mkdir -p /tmp/qualitest-repos /data/ui-artifacts \
+    && chown -R appuser:appuser /tmp/qualitest-repos /data/ui-artifacts /app
 USER appuser
+
+RUN python -m playwright install chromium
 
 EXPOSE 8000
 

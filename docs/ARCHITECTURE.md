@@ -14,6 +14,7 @@
         ├─ connectors    read-only probes per source
         ├─ planner       deterministic baseline + LLM augmentation
         ├─ runner        compiled single-SELECT probes → results
+        ├─ browser       approved Playwright checks + screenshot artifacts
         └─ report        structured summary + LLM narrative
         │
         ├──► Postgres (state)        sessions, connections, plans, runs, results
@@ -68,13 +69,27 @@ begins on `POST /api/runs/{id}/approve` (or the chat "Run N checks" button).
 
 ## Safety model
 
-- Every probe is compiled to a **single SELECT** and re-validated by
-  `assert_readonly()` (SELECT/WITH/SHOW/DESCRIBE/PRAGMA only, no semicolon
-  chaining, keyword blacklist) immediately before execution.
-- Connections run read-only (`default_transaction_read_only` for Postgres,
-  `SET SESSION TRANSACTION READ ONLY` for MySQL).
-- Passwords are `SecretStr`; `redacted()` is the only path back to the client.
-- The API never echoes credentials, and errors are truncated + typed.
+- Every data probe is compiled to a **single SELECT** and re-validated by
+  `assert_readonly()` immediately before execution.
+- Database connections run read-only; passwords are `SecretStr` and
+  `redacted()` is the only path back to clients.
+- Errors are truncated and typed; browser origins are constrained and metadata
+  endpoints are blocked.
+
+## Frontend UI checks
+
+Web targets are stored as `SourceType.WEB` connections, but do not implement
+the SQL `Connector` interface. The runner partitions approved plans between the
+SQL executor and a Playwright Chromium runner. A same-origin breadth-first link
+walk discovers routes and selector hints; deterministic checks cover page loads,
+element visibility, console/network health, screenshots, and navigation flows.
+LLM checks are constrained to discovered routes/selectors and may add DOM
+assertions and UI-to-warehouse parity.
+Browser navigation is same-origin by default, with cloud metadata endpoints
+blocked. Screenshots and event logs are saved under the shared `ui-artifacts`
+volume and served through the run artifact endpoint. Flow actions appear in the
+approval plan because they can change application state.
+
 
 ## Failure isolation
 

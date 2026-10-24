@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, PlainSerializer, SecretStr
+from pydantic import BaseModel, Field, PlainSerializer, SecretStr, field_validator
 
 
 def _unmask(secret: SecretStr | None) -> str | None:
@@ -41,6 +41,7 @@ def now() -> datetime:
 
 
 class SourceType(StrEnum):
+    WEB = "web"
     POSTGRES = "postgres"
     MYSQL = "mysql"
     SNOWFLAKE = "snowflake"
@@ -76,17 +77,41 @@ class ConnectionSpec(BaseModel):
     region: str | None = None
     key: str | None = None
     path: str | None = None
+    url: str | None = None
+    auth_mode: Literal["none", "basic", "login"] = "none"
+    auth_username: str | None = None
+    auth_password: StoredSecret = None
+    headers: dict[str, str] = Field(default_factory=dict)
     file_format: str = "csv"
     read_only: bool = True
     options: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True, "serialize_by_alias": True}
 
+    @field_validator("url")
+    @classmethod
+    def _no_credentials_in_web_url(cls, value: str | None) -> str | None:
+        if value:
+            from urllib.parse import urlsplit
+
+            parsed = urlsplit(value)
+            if parsed.username or parsed.password:
+                raise ValueError("web URL credentials must use auth_username/auth_password fields")
+        return value
+
     def redacted(self) -> dict[str, Any]:
         d = self.model_dump(mode="json", by_alias=True)
-        for k in ("password", "token", "credentials_json"):
+        if d.get("url"):
+            from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+            parsed = urlsplit(d["url"])
+            query = urlencode([(key, "***") for key, _ in parse_qsl(parsed.query, keep_blank_values=True)])
+            d["url"] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, ""))
+        for k in ("password", "token", "credentials_json", "auth_password"):
             if d.get(k):
                 d[k] = "***"
+        if d.get("headers"):
+            d["headers"] = {key: "***" for key in d["headers"]}
         return d
 
 
@@ -342,6 +367,7 @@ class QuestionKind(StrEnum):
     FILE_UPLOAD = "file_upload"
     PASTE = "paste"
     CONNECTION = "connection"
+    WEB_TARGET = "web_target"
 
 
 class QuestionOption(BaseModel):
@@ -387,6 +413,20 @@ class CheckKind(StrEnum):
     DISTRIBUTION = "distribution"
     CUSTOM_SQL = "custom_sql"
     VOLUME = "volume"
+    PAGE_LOAD = "page_load"
+    ELEMENT_PRESENT = "element_present"
+    ELEMENT_TEXT = "element_text"
+    CONSOLE_CLEAN = "console_clean"
+    NETWORK_CLEAN = "network_clean"
+    UI_PARITY = "ui_parity"
+    FLOW = "flow"
+    VISUAL_DIFF = "visual_diff"
+
+
+class UiStep(BaseModel):
+    action: Literal["goto", "click", "fill", "press", "wait", "assert_text", "assert_present"]
+    selector: str | None = None
+    value: str | None = None
 
 
 class Severity(StrEnum):
@@ -419,7 +459,12 @@ class CheckSpec(BaseModel):
     id: str = Field(default_factory=new_id)
     name: str
     kind: CheckKind
-    table: TableRef
+    table: TableRef | None = None
+    source_id: str | None = None
+    url: str | None = None
+    selector: str | None = None
+    expected: str | None = None
+    steps: list[UiStep] = Field(default_factory=list)
     column: str | None = None
     severity: Severity = Severity.CRITICAL
     # threshold semantics depend on kind:
@@ -458,11 +503,13 @@ class CheckResult(BaseModel):
     check_id: str
     name: str
     kind: CheckKind
-    table: TableRef
+    table: TableRef | None = None
+    url: str | None = None
+    artifacts: list[str] = Field(default_factory=list)
     column: str | None = None
     severity: Severity = Severity.CRITICAL
     status: CheckStatus = CheckStatus.PENDING
-    observed: float | str | None = None
+    observed: float | str | dict[str, Any] | None = None
     expected: float | str | None = None
     failed_rows: int | None = None
     sample_rows: list[dict[str, Any]] = Field(default_factory=list)

@@ -175,6 +175,17 @@ def question_program(question: Question, analysis: EtlAnalysis | None = None) ->
                     preferred=opt.preferred,
                 )
             )
+        elif opt.kind == QuestionKind.WEB_TARGET:
+            options.append(
+                _option(
+                    question,
+                    opt.kind,
+                    label=opt.label,
+                    help=opt.help,
+                    placeholder=opt.placeholder,
+                    preferred=opt.preferred,
+                )
+            )
 
     if not options:
         actions = [o.label for o in question.options if o.kind == QuestionKind.PASTE]
@@ -228,7 +239,12 @@ def plan_program(plan: TestPlan, missing: list[str] | None = None) -> str:
                     "id": c.id,
                     "name": c.name,
                     "kind": str(c.kind),
-                    "table": c.table.fqn,
+                    "table": c.table.fqn if c.table else (c.url or "web app"),
+                    "url": c.url,
+                    "selector": c.selector,
+                    "expected": c.expected,
+                    "steps": [step.model_dump() for step in c.steps],
+                    "params": c.params,
                     "column": c.column,
                     "severity": str(c.severity),
                     "rationale": c.rationale,
@@ -245,7 +261,7 @@ def plan_program(plan: TestPlan, missing: list[str] | None = None) -> str:
     return f"PlanCard({', '.join(args)})"
 
 
-def _observed(value: float | str | None) -> float | str | None:
+def _observed(value: float | str | dict[str, Any] | None) -> float | str | dict[str, Any] | None:
     return value
 
 
@@ -258,7 +274,9 @@ def report_program(run: RunResult) -> str:
                     "checkId": r.check_id,
                     "name": r.name,
                     "kind": str(r.kind),
-                    "table": r.table.fqn,
+                    "table": r.table.fqn if r.table else (r.url or "web app"),
+                    "url": r.url,
+                    "artifacts": r.artifacts,
                     "column": r.column,
                     "severity": str(r.severity),
                     "status": str(r.status),
@@ -401,7 +419,8 @@ def state_snapshot(
                     "id": c.id,
                     "name": c.name,
                     "kind": str(c.kind),
-                    "table": c.table.fqn,
+                    "table": c.table.fqn if c.table else (c.url or "web app"),
+                    "url": c.url,
                     "column": c.column,
                     "severity": str(c.severity),
                     "rationale": c.rationale,
@@ -420,7 +439,8 @@ def state_snapshot(
                     "check_id": c.check_id,
                     "name": c.name,
                     "kind": str(c.kind),
-                    "table": c.table.fqn,
+                    "table": c.table.fqn if c.table else (c.url or "web app"),
+                    "url": c.url,
                     "column": c.column,
                     "severity": str(c.severity),
                     "status": str(c.status),

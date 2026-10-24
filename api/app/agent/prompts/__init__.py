@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 SYSTEM = """You are the test-engineering copilot inside `qualitest`, an agentic data \
 quality auditing tool.
 
@@ -30,6 +32,7 @@ def plan_prompt(
 ) -> str:
     src_block = "\n".join(
         f"- id={s['id']!r} type={s['type']!r} schema={s.get('schema')!r} table={s['table']!r}"
+        + (f" routes={json.dumps(s.get('routes', []), ensure_ascii=True)[:8000]}" if s.get("type") == "web" else "")
         for s in sources
     )
     pc = f"{project_context}\n\n" if project_context else ""
@@ -38,6 +41,8 @@ def plan_prompt(
 
 ## Available tables in connected sources
 {src_block or "- (none introspected yet)"}
+
+Sources with type `web` are browser targets (their `table` field is the base URL), not SQL tables. Their `routes` field contains same-origin routes and discovered selector hints; only propose routes and selectors present in that evidence. You may propose page_load, element_present, element_text, console_clean, network_clean, ui_parity, flow, or visual_diff checks using `url`, `selector`, `expected`, and `steps`. UI parity uses a read-only scalar query against a non-web source. Set `params.rebaseline` to true only when the user explicitly requests replacing an approved visual baseline.
 
 ## User intent
 {user_intent or "Not stated. Infer intent from the ETL script."}
@@ -49,7 +54,7 @@ Design the test plan. Respond with a single JSON object:
   "checks": [
     {{
       "name": "human readable check name",
-      "kind": "schema|null_rate|unique|duplicate|referential|row_count|freshness|min_max|range|pattern|distribution|custom_sql|volume",
+      "kind": "schema|null_rate|unique|duplicate|referential|row_count|freshness|min_max|range|pattern|distribution|custom_sql|volume|page_load|element_present|element_text|console_clean|network_clean|ui_parity|flow|visual_diff",
       "source_id": "<id of the connected source>",
       "schema": "<database schema or null>",
       "table": "<table name exactly as in the source>",
@@ -60,14 +65,18 @@ Design the test plan. Respond with a single JSON object:
       "min_value": <number/string for range/min_max, else null>,
       "max_value": <number/string for range/min_max, else null>,
       "regex": "<pattern for pattern checks, else null>",
-      "params": {{"parent_table": "<for referential>", "parent_column": "<for referential>", "parent_schema": "<for referential>", "sla_hours": 24}},
-      "rationale": "why this check matters for this pipeline"
+      "params": {{"parent_table": "<for referential>", "parent_column": "<for referential>", "parent_schema": "<for referential>", "sla_hours": 24, "query": "read-only scalar SQL for ui_parity", "source_id": "warehouse source id", "tolerance": 0.01, "title_pattern": "regex", "ignore_patterns": ["regex"], "viewport": {{"width":1280,"height":720}}, "settle_ms": 300}},
+      "rationale": "why this check matters for this pipeline",
+      "url": "route path for UI checks, e.g. /dashboard",
+      "selector": "CSS selector for element and parity checks",
+      "expected": "expected title/text for UI checks",
+      "steps": [{{"action":"click|fill|press|wait|goto|assert_text|assert_present","selector":"CSS selector","value":"text or route"}}]
     }}
   ]
 }}
 
 Use `"schema"` (not `schema_`) and `"table"` keys exactly as written above. If a project \
-context is given above, honour its instructions and align checks with its knowledge files \
+ context is given above, honour its instructions and align checks with its knowledge files \
 (these supplement the ETL evidence; they never replace it). Cap the plan at 60 checks."""
 
 
