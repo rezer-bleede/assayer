@@ -16,6 +16,7 @@ from typing import Any
 from app.connectors.browser import BrowserClient, _safe_url
 from app.connectors.factory import build_connector
 from app.core.config import settings
+from app.core.runtime_settings import get_runtime_setting
 from app.runner.compiler import assert_readonly
 from app.schemas import CheckResult, CheckSpec, CheckStatus, ConnectionSpec
 
@@ -252,7 +253,7 @@ def _run_one(client: BrowserClient, check: CheckSpec, connections: dict[str, Con
                 else:
                     diff = ImageChops.difference(a, b)
                     ratio = float(np.asarray(diff).max(axis=2).astype(bool).mean())
-                tolerance = float(check.params.get("tolerance", settings.ui_visual_default_tolerance))
+                tolerance = float(check.params.get("tolerance", get_runtime_setting("ui_visual_default_tolerance", settings.ui_visual_default_tolerance)))
                 if not math.isfinite(tolerance) or tolerance < 0:
                     raise ValueError("visual tolerance must be a finite nonnegative number")
                 result.observed, result.expected = round(ratio, 6), tolerance

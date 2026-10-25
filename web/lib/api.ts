@@ -6,6 +6,7 @@ export const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8010';
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     cache: 'no-store',
   });
@@ -20,6 +21,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 async function reqVoid(path: string, init?: RequestInit): Promise<void> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     cache: 'no-store',
   });
@@ -74,7 +76,7 @@ export const api = {
     form.append('mode', sel.mode);
     const res = await fetch(
       `${API_URL}/api/etl/upload${session_id ? `?session_id=${encodeURIComponent(session_id)}` : ''}`,
-      { method: 'POST', body: form },
+      { method: 'POST', body: form, credentials: 'include' },
     );
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
@@ -108,6 +110,7 @@ export const api = {
     const res = await fetch(`${API_URL}/api/projects/${encodeURIComponent(id)}/files`, {
       method: 'POST',
       body: form,
+      credentials: 'include',
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -159,6 +162,7 @@ export async function connectFromUrlStream(
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify(body),
       cache: 'no-store',
+      credentials: 'include',
       signal,
     });
   } catch (e) {

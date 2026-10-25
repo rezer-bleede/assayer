@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from app.core.config import settings
 from app.core.logging import log
+from app.core.runtime_settings import get_runtime_setting
 from app.schemas import (
     CheckKind,
     CheckSpec,
@@ -495,7 +496,7 @@ def plan_checks(
         seen.add(key)
         unique.append(c)
 
-    return unique[: settings.run_max_checks]
+    return unique[: int(get_runtime_setting("run_max_checks", settings.run_max_checks))]
 
 
 _EQ_RE = re.compile(r"([\w.\"`]+)\s*=\s*([\w.\"`]+)")

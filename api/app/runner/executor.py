@@ -11,6 +11,7 @@ from app.connectors.base import Connector, ConnectorError
 from app.connectors.factory import build_connector
 from app.core.config import settings
 from app.core.logging import log
+from app.core.runtime_settings import get_runtime_setting
 from app.runner.compiler import (
     UnsafeSQLError,
     assert_readonly,
@@ -69,10 +70,10 @@ class TestRunner:
         started = datetime.now(UTC)
         t0 = time.perf_counter()
         result = RunResult(id=run_id, status=RunStatus.RUNNING, plan=plan, started_at=started)
-        checks = plan.checks[: settings.run_max_checks]
+        checks = plan.checks[: int(get_runtime_setting("run_max_checks", settings.run_max_checks))]
         ui_checks = [c for c in checks if c.source_id and self._conns.get(c.source_id) and self._conns[c.source_id].type == SourceType.WEB]
         sql_checks = [c for c in checks if c not in ui_checks]
-        sem = asyncio.Semaphore(settings.run_max_concurrency)
+        sem = asyncio.Semaphore(int(get_runtime_setting("run_max_concurrency", settings.run_max_concurrency)))
 
         await self._emit("run.started", {"run_id": run_id, "checks": len(checks)})
 
@@ -364,7 +365,7 @@ class TestRunner:
         try:
             sql = sample_failure_sql(check, conn)
             assert_readonly(sql)
-            return conn.query(sql).rows[: settings.run_max_row_sample]
+            return conn.query(sql).rows[: int(get_runtime_setting("run_max_row_sample", settings.run_max_row_sample))]
         except Exception as exc:  # noqa: BLE001 - sampling is best effort
             log.debug("sample fetch failed", check=check.name, error=str(exc))
             return []

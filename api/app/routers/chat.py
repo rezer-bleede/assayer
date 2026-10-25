@@ -25,9 +25,11 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.agent.plan_builder import build_plan
 from app.agent.planner import find_unresolved
+from app.core.identity import user_id_context, workspace_id_context
 from app.core.logging import log
 from app.core.routes import SafeAPIRoute
 from app.parsers import analyze_etl
@@ -60,8 +62,9 @@ from app.services.ingest import engine_word_guess, extract_connections_async, lo
 from app.services.orchestrator import build_bindings, introspect_all, profile_focus, run_audit
 from app.services.projects import project_context_for_session
 from app.services.source_filter import profile_summary
+from app.store import db as db_store
 from app.store import repository as repo
-from app.store.db import utcnow_str
+from app.store.db import LoginSessionRow, UserRow, WorkspaceMemberRow, WorkspaceRow, utcnow_str
 
 router = APIRouter(tags=["chat"], route_class=SafeAPIRoute)
 
@@ -790,7 +793,34 @@ def _is_affirmative(text: str) -> bool:
 
 @router.websocket("/ws/chat")
 async def ws_chat(ws: WebSocket) -> None:
-    await ws.accept()
+    token = ws.cookies.get("assayer_session")
+    if not token:
+        await ws.close(code=4401, reason="sign in required")
+        return
+    import hashlib
+
+    with db_store.SessionLocal() as db:
+        session = db.scalar(select(LoginSessionRow).where(
+            LoginSessionRow.token_hash == hashlib.sha256(token.encode()).hexdigest()
+        ))
+        if session is None or session.expires_at <= utcnow_str() or db.get(UserRow, session.user_id) is None:
+            await ws.close(code=4401, reason="session expired")
+            return
+        user_id = session.user_id
+        workspace_id: str | None = None
+        requested = ws.cookies.get("assayer_workspace")
+        membership = db.scalar(select(WorkspaceMemberRow).where(
+            WorkspaceMemberRow.user_id == user_id, WorkspaceMemberRow.workspace_id == requested
+        )) if requested else None
+        if membership:
+            workspace_id = membership.workspace_id
+        else:
+            personal = db.scalar(select(WorkspaceRow).join(
+                WorkspaceMemberRow, WorkspaceMemberRow.workspace_id == WorkspaceRow.id
+            ).where(WorkspaceMemberRow.user_id == user_id, WorkspaceRow.kind == "personal"))
+            workspace_id = personal.id if personal else None
+    user_marker = user_id_context.set(user_id)
+    workspace_marker = workspace_id_context.set(workspace_id)
     session_id: str | None = None
 
     async def send(event: str, data: dict[str, Any]) -> None:
@@ -799,6 +829,7 @@ async def ws_chat(ws: WebSocket) -> None:
         )
 
     try:
+        await ws.accept()
         hello = await ws.receive_text()
         payload = json.loads(hello)
         session_id = payload.get("session_id")
@@ -876,6 +907,9 @@ async def ws_chat(ws: WebSocket) -> None:
         log.exception("websocket error")
         with contextlib.suppress(Exception):
             await ws.close(code=1011, reason=str(exc)[:120])
+    finally:
+        user_id_context.reset(user_marker)
+        workspace_id_context.reset(workspace_marker)
 
 
 _CRED_ECHO = re.compile(r"(\w+://[^:/@\s]+:)([^@\s]+)(@)")

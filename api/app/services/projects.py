@@ -68,19 +68,34 @@ def decode_knowledge_file(data: bytes) -> str | None:
 
 
 def project_context_for_session(session_id: str) -> str | None:
-    """Render the thread's project as a prompt block, or None when unfiled."""
+    """Render account-wide preferences and the thread's project context."""
     try:
+        from app.core.identity import current_user_id
+        from app.store.db import SessionLocal, SessionRow, UserRow
+
+        uid = current_user_id()
+        if uid is None:
+            with SessionLocal() as db:
+                thread = db.get(SessionRow, session_id)
+                uid = thread.user_id if thread else None
+        personal = ""
+        if uid:
+            with SessionLocal() as db:
+                user = db.get(UserRow, uid)
+                if user:
+                    personal = str((user.settings or {}).get("instructions", "")).strip()
         project_id = repo.get_thread_project_id(session_id)
-        if not project_id:
-            return None
-        project = repo.get_project(project_id)
-        if not project:
-            return None
-        return render_project_context(
-            project["name"],
-            project.get("instructions") or "",
-            repo.list_project_files(project_id, with_content=True),
-        )
+        blocks = ["# Personal instructions\n" + personal] if personal else []
+        if project_id:
+            project = repo.get_project(project_id)
+            if project:
+                rendered = render_project_context(
+                    project["name"], project.get("instructions") or "",
+                    repo.list_project_files(project_id, with_content=True),
+                )
+                if rendered:
+                    blocks.append(rendered)
+        return "\n\n".join(blocks) or None
     except Exception as exc:  # noqa: BLE001 - context is an enhancement, never fatal
         log.warning("project context build failed", error=str(exc))
         return None

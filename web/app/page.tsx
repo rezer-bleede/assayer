@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { AuthGate } from '@/components/AuthGate';
 
 const AgentShell = dynamic(() => import('@/components/AgentShell'), {
   ssr: false,
@@ -12,5 +13,5 @@ const AgentShell = dynamic(() => import('@/components/AgentShell'), {
 });
 
 export default function AgentPage() {
-  return <AgentShell />;
+  return <AuthGate><AgentShell /></AuthGate>;
 }

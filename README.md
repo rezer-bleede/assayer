@@ -56,14 +56,21 @@ Share a project, connect a source, or provide a web-app URL. The agent analyzes 
 git clone <your-repo-url>
 cd assayer
 
-# 2. Start the stack — that is the whole setup
+# 2. Configure a one-time bootstrap token before exposing the app
+cp .env.example .env
+python3 -c 'import secrets; print("BOOTSTRAP_TOKEN=" + secrets.token_urlsafe(32)); print("SECRET_KEY=" + secrets.token_urlsafe(48))'
+# Put both generated values in the matching settings in .env.
+
+# 3. Start the stack
 docker compose up -d --build
 ```
 
-No `.env`, no keys, no seeding: the stack starts a local model, pulls it, and
-applies a demo dataset, so there is something to look at straight away.
-`.env` is optional — copy `.env.example` to `.env` to change ports, the model,
-or the provider.
+On first visit, create the administrator using the one-time token in `.env`.
+The setup closes after the first account is created, and existing chats and
+projects are adopted by that account. The stack starts a local model, pulls it,
+and applies a demo dataset. Keep `.env` private and set a unique `SECRET_KEY`
+before deploying beyond a trusted local environment. Google and OpenID Connect
+sign-in are optional; configure their provider credentials in `.env`.
 
 | Service | URL |
 |---|---|
@@ -82,6 +89,14 @@ or the provider.
 > that project, when it plans tests, runs them and writes the report.
 > Projects are optional; unfiled chats behave exactly as before, and the app
 > offers a project when you start a new test session.
+
+> **Accounts and workspaces:** accounts use server-side sessions and separate
+> personal/team workspace data. Create team workspaces in the account menu;
+> chats are private to their creator, while projects and their knowledge files
+> are scoped to the active workspace. Personal instructions and appearance are
+> available in Settings. Instance AI-provider and execution limits continue to
+> be configured in the server environment so they apply consistently to API
+> and worker processes.
 
 ### The model
 

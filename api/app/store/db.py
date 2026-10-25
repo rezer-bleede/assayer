@@ -21,6 +21,8 @@ class SessionRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     created_at: Mapped[str] = mapped_column(String(40), default="")
+    user_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    workspace_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
@@ -29,6 +31,8 @@ class ConnectionRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     session_id: Mapped[str | None] = mapped_column(String(64), index=True, default=None)
+    user_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    workspace_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(128))
     type: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[str] = mapped_column(String(40), default="")
@@ -40,6 +44,8 @@ class EtlRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     session_id: Mapped[str | None] = mapped_column(String(64), index=True, default=None)
+    user_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    workspace_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     language: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[str] = mapped_column(String(40), default="")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -50,6 +56,8 @@ class RunRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     session_id: Mapped[str | None] = mapped_column(String(64), index=True, default=None)
+    user_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    workspace_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(32), index=True, default="pending")
     score: Mapped[float] = mapped_column(Float, default=0.0)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -86,6 +94,8 @@ class ProjectRow(Base):
     name: Mapped[str] = mapped_column(String(120))
     instructions: Mapped[str] = mapped_column(String(8000), default="")
     created_at: Mapped[str] = mapped_column(String(40), default="")
+    owner_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    workspace_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
@@ -97,7 +107,74 @@ class ProjectFileRow(Base):
     name: Mapped[str] = mapped_column(String(255))
     size: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[str] = mapped_column(String(40), default="")
+    owner_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    workspace_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class UserRow(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(String(256), default="")
+    role: Mapped[str] = mapped_column(String(32), default="member")
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class LoginSessionRow(Base):
+    __tablename__ = "login_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[str] = mapped_column(String(40), index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+
+
+class WorkspaceRow(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    owner_id: Mapped[str] = mapped_column(String(64), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="personal")
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+
+
+class WorkspaceMemberRow(Base):
+    __tablename__ = "workspace_members"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    role: Mapped[str] = mapped_column(String(32), default="member")
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+
+
+class AppSettingsRow(Base):
+    __tablename__ = "app_settings"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    values: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[str] = mapped_column(String(40), default="")
+
+
+class WorkspaceInviteRow(Base):
+    __tablename__ = "workspace_invites"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), index=True)
+    role: Mapped[str] = mapped_column(String(32), default="member")
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_by: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[str] = mapped_column(String(40), index=True)
+    accepted_at: Mapped[str | None] = mapped_column(String(40), nullable=True, default=None)
+    created_at: Mapped[str] = mapped_column(String(40), default="")
 
 
 def _engine_kwargs(url: str) -> dict:
@@ -159,8 +236,33 @@ def init_db() -> None:
         log.debug("pgcrypto extension skipped", error=str(exc))
 
     Base.metadata.create_all(engine)
+    _ensure_auth_columns(engine)
     _widen_composite_pk(engine)
     log.info("state store ready")
+
+
+def _ensure_auth_columns(eng) -> None:
+    """Add nullable ownership columns to databases created before accounts."""
+    statements = (
+        "ALTER TABLE sessions ADD COLUMN user_id VARCHAR(64)",
+        "ALTER TABLE sessions ADD COLUMN workspace_id VARCHAR(64)",
+        "ALTER TABLE connections ADD COLUMN user_id VARCHAR(64)",
+        "ALTER TABLE connections ADD COLUMN workspace_id VARCHAR(64)",
+        "ALTER TABLE etl_analyses ADD COLUMN user_id VARCHAR(64)",
+        "ALTER TABLE etl_analyses ADD COLUMN workspace_id VARCHAR(64)",
+        "ALTER TABLE runs ADD COLUMN user_id VARCHAR(64)",
+        "ALTER TABLE runs ADD COLUMN workspace_id VARCHAR(64)",
+        "ALTER TABLE projects ADD COLUMN owner_id VARCHAR(64)",
+        "ALTER TABLE projects ADD COLUMN workspace_id VARCHAR(64)",
+        "ALTER TABLE project_files ADD COLUMN owner_id VARCHAR(64)",
+        "ALTER TABLE project_files ADD COLUMN workspace_id VARCHAR(64)",
+    )
+    for statement in statements:
+        try:
+            with eng.begin() as conn:
+                conn.execute(text(statement))
+        except Exception:  # already present (or unsupported dialect)
+            pass
 
 
 def _widen_composite_pk(eng) -> None:

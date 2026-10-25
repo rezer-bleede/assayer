@@ -11,17 +11,22 @@
 import { AgentInterface, useNav, useThreadList } from '@openuidev/react-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProjects, type ThreadWithProject } from '@/lib/projects';
-import type { Theme } from '@/lib/theme';
+import type { Theme, ThemeChoice } from '@/lib/theme';
 import { FolderIcon, GearIcon, MessageIcon, PlusIcon, TrashIcon } from './icons';
+import { AccountSettings } from './AccountSettings';
 
 export function ProjectsSidebar({
   onOpenSettings,
   theme,
   onThemeChange,
+  themeChoice,
+  onThemeChoiceChange,
 }: {
   onOpenSettings: (id: string) => void;
   theme: Theme;
   onThemeChange: (next: Theme) => void;
+  themeChoice: ThemeChoice;
+  onThemeChoiceChange: (next: ThemeChoice) => void;
 }) {
   const threads = useThreadList((s) => s.threads) as unknown as ThreadWithProject[];
   const selectedThreadId = useThreadList((s) => s.selectedThreadId);
@@ -230,6 +235,7 @@ export function ProjectsSidebar({
         ) : null}
       </AgentInterface.SidebarContent>
       <AgentInterface.SidebarFooter>
+        <AccountSettings theme={themeChoice} onThemeChange={onThemeChoiceChange} />
         <AgentInterface.ThemeModeToggle mode={theme} onModeChange={onThemeChange} />
       </AgentInterface.SidebarFooter>
     </>

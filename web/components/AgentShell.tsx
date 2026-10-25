@@ -24,6 +24,7 @@ import { ProjectNudge } from '@/components/ProjectNudge';
 const llm = fetchLLM({
   url: `${API_URL}/agent`,
   streamAdapter: agUIAdapter(),
+  fetch: (input, init) => fetch(input, { ...init, credentials: 'include' }),
 });
 
 const threadStorage = projectAwareStorage();
@@ -48,7 +49,7 @@ const starters = [
 ];
 
 export default function AgentShell() {
-  const { theme, setChoice } = useTheme();
+  const { theme, choice, setChoice } = useTheme();
   const [navPath, setNavPath] = useState<string | undefined>(undefined);
   const [settingsProjectId, setSettingsProjectId] = useState<string | null>(null);
   const loadProjects = useProjects((s) => s.load);
@@ -83,6 +84,8 @@ export default function AgentShell() {
         <ProjectsSidebar
           theme={theme}
           onThemeChange={(next) => setChoice(next)}
+          themeChoice={choice}
+          onThemeChoiceChange={setChoice}
           onOpenSettings={(id) => {
             setSettingsProjectId(id);
           }}

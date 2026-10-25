@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.identity import current_user_id, current_workspace_id
 from app.schemas import (
     ChatMessage,
     ConnectionRecord,
@@ -35,20 +36,26 @@ def ensure_session(session_id: str) -> None:
     with write_session() as s:
         exists = s.get(SessionRow, session_id)
         if not exists:
-            s.add(SessionRow(id=session_id, created_at=utcnow_str(), payload={}))
+            s.add(SessionRow(id=session_id, user_id=current_user_id(), workspace_id=current_workspace_id(), created_at=utcnow_str(), payload={}))
+        elif current_user_id() and (exists.user_id != current_user_id() or exists.workspace_id != current_workspace_id()):
+            raise PermissionError("thread belongs to another account")
 
 
 def load_session_payload(session_id: str) -> dict[str, Any]:
     with write_session() as s:
         row = s.get(SessionRow, session_id)
-        return dict(row.payload) if row else {}
+        if row is None or (current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id())):
+            return {}
+        return dict(row.payload)
 
 
 def update_session_payload(session_id: str, payload: dict[str, Any]) -> None:
     with write_session() as s:
         row = s.get(SessionRow, session_id)
         if row is None:
-            s.add(SessionRow(id=session_id, created_at=utcnow_str(), payload=payload))
+            s.add(SessionRow(id=session_id, user_id=current_user_id(), workspace_id=current_workspace_id(), created_at=utcnow_str(), payload=payload))
+        elif current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id()):
+            raise PermissionError("thread belongs to another account")
         else:
             row.payload = payload
 
@@ -102,6 +109,8 @@ def save_connection(spec: ConnectionSpec, session_id: str | None = None) -> Conn
             ConnectionRow(
                 id=rec.id,
                 session_id=session_id,
+                user_id=current_user_id(),
+                workspace_id=current_workspace_id(),
                 name=spec.name,
                 type=str(spec.type),
                 created_at=rec.created_at.isoformat(),
@@ -114,6 +123,8 @@ def save_connection(spec: ConnectionSpec, session_id: str | None = None) -> Conn
 def get_connection(conn_id: str) -> ConnectionSpec | None:
     with write_session() as s:
         row = s.get(ConnectionRow, conn_id)
+        if row is not None and current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id()):
+            return None
         return ConnectionSpec.model_validate(row.payload) if row else None
 
 
@@ -122,6 +133,8 @@ def list_connections(session_id: str | None = None) -> list[ConnectionSpec]:
         q = s.query(ConnectionRow)
         if session_id:
             q = q.filter(ConnectionRow.session_id == session_id)
+        if current_user_id():
+            q = q.filter(ConnectionRow.user_id == current_user_id(), ConnectionRow.workspace_id == current_workspace_id())
         return [
             ConnectionSpec.model_validate(r.payload) for r in q.order_by(ConnectionRow.created_at)
         ]
@@ -138,6 +151,8 @@ def save_etl(analysis: EtlAnalysis, session_id: str | None = None) -> EtlAnalysi
             EtlRow(
                 id=analysis.id,
                 session_id=session_id,
+                user_id=current_user_id(),
+                workspace_id=current_workspace_id(),
                 language=str(analysis.language),
                 created_at=analysis.created_at.isoformat(),
                 payload=analysis.model_dump(mode="json"),
@@ -149,6 +164,8 @@ def save_etl(analysis: EtlAnalysis, session_id: str | None = None) -> EtlAnalysi
 def get_etl(etl_id: str) -> EtlAnalysis | None:
     with write_session() as s:
         row = s.get(EtlRow, etl_id)
+        if row is not None and current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id()):
+            return None
         return EtlAnalysis.model_validate(row.payload) if row else None
 
 
@@ -167,12 +184,16 @@ def save_plan(plan: TestPlan, session_id: str | None = None) -> TestPlan:
                 RunRow(
                     id=run_id,
                     session_id=session_id,
+                    user_id=current_user_id(),
+                    workspace_id=current_workspace_id(),
                     status="awaiting_approval",
                     created_at=plan.created_at.isoformat(),
                     payload={"plan": payload},
                 )
             )
         else:
+            if current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id()):
+                raise PermissionError("run belongs to another account or workspace")
             row.payload = {**row.payload, "plan": payload}
             row.status = "awaiting_approval"
     plan.run_id = plan.run_id or plan.id
@@ -182,7 +203,7 @@ def save_plan(plan: TestPlan, session_id: str | None = None) -> TestPlan:
 def get_plan(run_id: str) -> TestPlan | None:
     with write_session() as s:
         row = s.get(RunRow, run_id)
-        if not row or "plan" not in row.payload:
+        if not row or (current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id())) or "plan" not in row.payload:
             return None
         return TestPlan.model_validate(row.payload["plan"])
 
@@ -196,6 +217,8 @@ def save_run(result: RunResult, session_id: str | None = None) -> RunResult:
                 RunRow(
                     id=result.id,
                     session_id=session_id,
+                    user_id=current_user_id(),
+                    workspace_id=current_workspace_id(),
                     status=str(result.status),
                     score=result.score.overall,
                     duration_ms=int(result.duration_ms or 0),
@@ -204,6 +227,8 @@ def save_run(result: RunResult, session_id: str | None = None) -> RunResult:
                 )
             )
         else:
+            if current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id()):
+                raise PermissionError("run belongs to another account or workspace")
             row.status = str(result.status)
             row.score = result.score.overall
             row.duration_ms = int(result.duration_ms or 0)
@@ -236,12 +261,16 @@ def save_run(result: RunResult, session_id: str | None = None) -> RunResult:
 def get_run(run_id: str) -> RunResult | None:
     with write_session() as s:
         row = s.get(RunRow, run_id)
-        return RunResult.model_validate(row.payload) if row else None
+        if row is None or (current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id())):
+            return None
+        return RunResult.model_validate(row.payload)
 
 
 def list_runs(session_id: str | None = None, limit: int = 50) -> list[RunResult]:
     with write_session() as s:
         q = s.query(RunRow)
+        if current_user_id():
+            q = q.filter(RunRow.user_id == current_user_id(), RunRow.workspace_id == current_workspace_id())
         if session_id:
             q = q.filter(RunRow.session_id == session_id)
         return [
@@ -256,6 +285,7 @@ def list_runs(session_id: str | None = None, limit: int = 50) -> list[RunResult]
 
 
 def append_message(session_id: str, message: ChatMessage) -> ChatMessage:
+    ensure_session(session_id)
     payload = message.model_dump(mode="json")
     with write_session() as s:
         row = s.get(ChatMessageRow, message.id)
@@ -283,7 +313,11 @@ def get_message(message_id: str) -> ChatMessage | None:
 
 def list_threads() -> list[dict[str, Any]]:
     with write_session() as s:
-        rows = s.query(SessionRow).order_by(SessionRow.created_at.desc()).all()
+        q = s.query(SessionRow)
+        uid = current_user_id()
+        if uid:
+            q = q.filter(SessionRow.workspace_id == current_workspace_id(), SessionRow.user_id == uid)
+        rows = q.order_by(SessionRow.created_at.desc()).all()
         return [
             {
                 "id": r.id,
@@ -298,7 +332,7 @@ def list_threads() -> list[dict[str, Any]]:
 def rename_thread(session_id: str, title: str) -> dict[str, Any] | None:
     with write_session() as s:
         row = s.get(SessionRow, session_id)
-        if row is None:
+        if row is None or (current_user_id() and (row.user_id != current_user_id() or row.workspace_id != current_workspace_id())):
             return None
         payload = dict(row.payload or {})
         payload["title"] = title[:120]
@@ -308,6 +342,9 @@ def rename_thread(session_id: str, title: str) -> dict[str, Any] | None:
 
 def delete_thread(session_id: str) -> None:
     with write_session() as s:
+        thread = s.get(SessionRow, session_id)
+        if thread is None or (current_user_id() and (thread.user_id != current_user_id() or thread.workspace_id != current_workspace_id())):
+            return
         for row in s.query(ChatMessageRow).filter(ChatMessageRow.session_id == session_id).all():
             s.delete(row)
         row = s.get(SessionRow, session_id)
@@ -317,6 +354,9 @@ def delete_thread(session_id: str) -> None:
 
 def list_messages(session_id: str, limit: int = 200) -> list[ChatMessage]:
     with write_session() as s:
+        thread = s.get(SessionRow, session_id)
+        if thread is None or (current_user_id() and (thread.user_id != current_user_id() or thread.workspace_id != current_workspace_id())):
+            return []
         rows = (
             s.query(ChatMessageRow)
             .filter(ChatMessageRow.session_id == session_id)
@@ -343,6 +383,8 @@ def save_project(
                 name=name[:120],
                 instructions=instructions[:8000],
                 created_at=utcnow_str(),
+                owner_id=current_user_id(),
+                workspace_id=current_workspace_id(),
                 payload={},
             )
         )
@@ -351,14 +393,23 @@ def save_project(
 
 def list_projects() -> list[dict[str, Any]]:
     with write_session() as s:
-        projects = s.query(ProjectRow).order_by(ProjectRow.created_at.desc()).all()
+        q = s.query(ProjectRow)
+        if current_user_id():
+            q = q.filter(ProjectRow.workspace_id == current_workspace_id())
+        projects = q.order_by(ProjectRow.created_at.desc()).all()
         counts: dict[str, int] = {}
         file_counts: dict[str, int] = {}
-        for row in s.query(SessionRow).all():
+        session_query = s.query(SessionRow)
+        if current_user_id():
+            session_query = session_query.filter(SessionRow.user_id == current_user_id(), SessionRow.workspace_id == current_workspace_id())
+        for row in session_query.all():
             pid = (row.payload or {}).get("project_id")
             if pid:
                 counts[pid] = counts.get(pid, 0) + 1
-        for f in s.query(ProjectFileRow).all():
+        file_query = s.query(ProjectFileRow)
+        if current_user_id():
+            file_query = file_query.filter(ProjectFileRow.workspace_id == current_workspace_id())
+        for f in file_query.all():
             file_counts[f.project_id] = file_counts.get(f.project_id, 0) + 1
         return [
             {
@@ -376,7 +427,7 @@ def list_projects() -> list[dict[str, Any]]:
 def get_project(project_id: str) -> dict[str, Any] | None:
     with write_session() as s:
         p = s.get(ProjectRow, project_id)
-        if p is None:
+        if p is None or (current_user_id() and p.workspace_id != current_workspace_id()):
             return None
         return {
             "id": p.id,
@@ -391,7 +442,7 @@ def update_project(
 ) -> dict[str, Any] | None:
     with write_session() as s:
         p = s.get(ProjectRow, project_id)
-        if p is None:
+        if p is None or (current_user_id() and p.workspace_id != current_workspace_id()):
             return None
         if name is not None and name.strip():
             p.name = name.strip()[:120]
@@ -404,11 +455,14 @@ def delete_project(project_id: str) -> bool:
     """Delete the project; its chats revert to unfiled, its files go with it."""
     with write_session() as s:
         p = s.get(ProjectRow, project_id)
-        if p is None:
+        if p is None or (current_user_id() and p.workspace_id != current_workspace_id()):
             return False
         for f in s.query(ProjectFileRow).filter(ProjectFileRow.project_id == project_id).all():
             s.delete(f)
-        for row in s.query(SessionRow).all():
+        session_query = s.query(SessionRow)
+        if current_user_id():
+            session_query = session_query.filter(SessionRow.user_id == current_user_id(), SessionRow.workspace_id == current_workspace_id())
+        for row in session_query.all():
             payload = dict(row.payload or {})
             if payload.get("project_id") == project_id:
                 payload.pop("project_id", None)
@@ -427,6 +481,8 @@ def add_project_file(project_id: str, name: str, text: str) -> dict[str, Any]:
                 name=name[:255],
                 size=len(text.encode("utf-8", "replace")),
                 created_at=utcnow_str(),
+                owner_id=current_user_id(),
+                workspace_id=current_workspace_id(),
                 payload={"text": text},
             )
         )
@@ -438,6 +494,7 @@ def list_project_files(project_id: str, with_content: bool = False) -> list[dict
         rows = (
             s.query(ProjectFileRow)
             .filter(ProjectFileRow.project_id == project_id)
+            .filter(ProjectFileRow.workspace_id == current_workspace_id() if current_user_id() else True)
             .order_by(ProjectFileRow.created_at)
             .all()
         )
@@ -458,7 +515,7 @@ def list_project_files(project_id: str, with_content: bool = False) -> list[dict
 def delete_project_file(project_id: str, file_id: str) -> bool:
     with write_session() as s:
         row = s.get(ProjectFileRow, file_id)
-        if row is None or row.project_id != project_id:
+        if row is None or row.project_id != project_id or (current_user_id() and row.workspace_id != current_workspace_id()):
             return False
         s.delete(row)
         return True

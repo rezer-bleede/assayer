@@ -82,7 +82,8 @@ export const useProjects = create<ProjectsState>((set, get) => ({
 }));
 
 export function projectAwareStorage(): ChatStorage {
-  const base = restStorage({ baseUrl: `${API_URL}/api/threads` });
+  const withSession: typeof fetch = (input, init) => fetch(input, { ...init, credentials: 'include' });
+  const base = restStorage({ baseUrl: `${API_URL}/api/threads`, fetch: withSession });
   return {
     ...base,
     thread: {
@@ -92,6 +93,7 @@ export function projectAwareStorage(): ChatStorage {
         const res = await fetch(`${API_URL}/api/threads/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           cache: 'no-store',
           body: JSON.stringify({ messages: [firstMessage], projectId }),
         });

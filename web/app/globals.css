@@ -59,6 +59,54 @@ body {
   height: 100%;
 }
 
+.auth-page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at 50% 0%, rgb(var(--accent) / 8%), transparent 55%), rgb(var(--bg));
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  padding: 34px;
+  border: 1px solid rgb(var(--border));
+  border-radius: 18px;
+  background: rgb(var(--surface));
+  box-shadow: 0 18px 70px rgb(0 0 0 / 7%);
+}
+
+.auth-label { display: block; color: rgb(var(--fg)); font-size: 12px; font-weight: 550; }
+.account-trigger { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; border-radius: 9px; padding: 8px; background: transparent; cursor: pointer; text-align: left; }
+.account-trigger:hover { background: rgb(var(--fg) / 5%); }
+.account-avatar { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: rgb(var(--accent) / 15%); color: rgb(var(--accent)); font-size: 12px; font-weight: 650; }
+.settings-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 24px; background: rgb(0 0 0 / 43%); backdrop-filter: blur(5px); }
+.settings-window { display: flex; width: min(100%, 820px); height: min(700px, 90dvh); flex-direction: column; overflow: hidden; border: 1px solid rgb(var(--border)); border-radius: 16px; background: rgb(var(--surface)); box-shadow: 0 24px 90px rgb(0 0 0 / 25%); }
+.settings-close { width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: rgb(var(--muted)); font-size: 24px; line-height: 1; cursor: pointer; }
+.settings-close:hover { background: rgb(var(--fg) / 7%); color: rgb(var(--fg)); }
+.settings-layout { display: grid; min-height: 0; flex: 1; grid-template-columns: 190px minmax(0, 1fr); }
+.settings-nav { display: flex; flex-direction: column; gap: 3px; border-right: 1px solid rgb(var(--border)); padding: 18px 12px; }
+.settings-nav-item { border: 0; border-radius: 7px; padding: 9px 10px; background: transparent; color: rgb(var(--muted)); font-size: 13px; text-align: left; cursor: pointer; }
+.settings-nav-item:hover, .settings-nav-item.is-active { background: rgb(var(--fg) / 5%); color: rgb(var(--fg)); }
+.settings-nav-item.is-active { font-weight: 600; }
+.settings-content { overflow-y: auto; padding: 26px 30px; }
+.settings-heading { font-size: 18px; font-weight: 650; letter-spacing: -.02em; }
+.settings-description { margin-top: 5px; color: rgb(var(--muted)); font-size: 12px; line-height: 1.6; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgb(var(--border)); padding: 14px 0; }
+.settings-badge { flex: 0 0 auto; border-radius: 999px; background: rgb(var(--fg) / 5%); padding: 4px 8px; color: rgb(var(--muted)); font-size: 10px; }
+.choice-card { border: 1px solid rgb(var(--border)); border-radius: 8px; padding: 9px; background: transparent; color: rgb(var(--fg)); font-size: 12px; cursor: pointer; }
+.choice-card:hover, .choice-card.choice-selected { border-color: rgb(var(--accent) / 65%); background: rgb(var(--accent) / 8%); }
+
+@media (max-width: 600px) {
+  .auth-card { padding: 26px 22px; }
+  .settings-backdrop { padding: 0; }
+  .settings-window { width: 100%; height: 100dvh; border: 0; border-radius: 0; }
+  .settings-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .settings-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid rgb(var(--border)); padding: 8px 14px; }
+  .settings-nav-item { flex: 0 0 auto; }
+  .settings-content { padding: 22px; }
+}
+
 .assayer-brand-mark {
   display: block;
   width: 34px;
