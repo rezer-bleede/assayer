@@ -3,9 +3,9 @@ FROM python:3.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_ROOT_USER_ACTION=ignore
+    PIP_ROOT_USER_ACTION=ignore \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
@@ -18,13 +18,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
-COPY app ./app
 
-# Every dependency ships a manylinux wheel, so no build toolchain is needed.
-# PIP_DEFAULT_TIMEOUT/RETRIES matter: the duckdb wheel is ~18 MB and a flaky
-# read from PyPI otherwise fails the whole build.
-RUN pip install --upgrade pip setuptools wheel \
-    && pip install --prefer-binary --timeout 120 --retries 8 -e ".[mysql,s3,dev,ui]"
+# Keep pyproject.toml as the single source of truth while installing third-party
+# dependencies before application code, so ordinary source changes reuse this layer.
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    python -c 'import tomllib; p=tomllib.load(open("pyproject.toml", "rb")); deps=p["project"]["dependencies"] + sum((p["project"]["optional-dependencies"][name] for name in ("mysql", "s3", "dev", "ui")), []) + [p["build-system"]["requires"][0]]; open("/tmp/requirements.txt", "w").write("\n".join(deps) + "\n")' \
+    && pip install --upgrade pip setuptools wheel \
+    && pip install --prefer-binary --timeout 120 --retries 8 -r /tmp/requirements.txt
 
 RUN python -m playwright install-deps chromium \
     && rm -rf /var/lib/apt/lists/*
@@ -32,10 +32,17 @@ RUN python -m playwright install-deps chromium \
 # the clone workdir must be writable by the unprivileged app user
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /tmp/assayer-repos /data/ui-artifacts \
-    && chown -R appuser:appuser /tmp/assayer-repos /data/ui-artifacts /app
-USER appuser
+    && chown appuser:appuser /tmp/assayer-repos /data/ui-artifacts /app
 
-RUN python -m playwright install chromium
+# Browser binaries are large; keep them in a source-independent layer.
+RUN python -m playwright install chromium \
+    && chmod -R a+rX /ms-playwright
+
+COPY --chown=appuser:appuser app ./app
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --no-deps --no-build-isolation .
+
+USER appuser
 
 EXPOSE 8000
 

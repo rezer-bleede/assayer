@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1.7
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install --no-audit --no-fund
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
 
 FROM node:20-alpine AS builder
 WORKDIR /app
@@ -19,7 +20,8 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production
 
-RUN npm run build \
+RUN --mount=type=cache,target=/app/.next/cache \
+    npm run build \
     && grep -rq "$NEXT_PUBLIC_API_URL" .next/static && echo "build args verified"
 
 FROM node:20-alpine AS runner
