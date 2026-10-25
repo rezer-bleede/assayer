@@ -11,13 +11,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.config import settings
 from app.schemas import new_id
 from app.store import db as db_store
 from app.store.db import (
     AppSettingsRow,
+    GuestSessionRow,
     LoginSessionRow,
     UserRow,
     WorkspaceInviteRow,
@@ -29,6 +30,9 @@ from app.store.db import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 COOKIE = "assayer_session"
 SESSION_DAYS = 30
+GUEST_COOKIE = "assayer_guest"
+GUEST_DAYS = 7
+GUEST_MESSAGE_LIMIT = 5
 
 
 def _password_hash(password: str, salt: bytes | None = None) -> str:
@@ -116,6 +120,10 @@ class BootstrapRequest(Credentials):
     setup_token: str = Field(min_length=16, max_length=256)
 
 
+class SignupRequest(Credentials):
+    name: str = Field(min_length=1, max_length=120)
+
+
 class ProfilePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     settings: dict[str, Any] | None = None
@@ -157,14 +165,75 @@ class PasswordChange(BaseModel):
 
 
 @router.get("/status")
-def status() -> dict[str, Any]:
+def status(request: Request, response: Response) -> dict[str, Any]:
     with db_store.SessionLocal() as db:
         has_users = db.scalar(select(UserRow.id).limit(1)) is not None
+        token = request.cookies.get(GUEST_COOKIE)
+        guest = db.scalar(select(GuestSessionRow).where(
+            GuestSessionRow.token_hash == hashlib.sha256(token.encode()).hexdigest()
+        )) if token else None
+        if guest is None or guest.expires_at <= utcnow_str():
+            token = secrets.token_urlsafe(32)
+            guest = GuestSessionRow(
+                id=new_id(), token_hash=hashlib.sha256(token.encode()).hexdigest(), message_count=0,
+                expires_at=(datetime.now(UTC) + timedelta(days=GUEST_DAYS)).isoformat(), created_at=utcnow_str(),
+            )
+            db.add(guest)
+            db.commit()
+            response.set_cookie(GUEST_COOKIE, token, httponly=True, secure=request.url.scheme == "https",
+                                samesite="lax", max_age=GUEST_DAYS * 86400, path="/")
     return {
         "setup_required": not has_users,
         "google_enabled": bool(settings.google_client_id and settings.google_client_secret),
         "sso_enabled": bool(settings.oidc_issuer and settings.oidc_client_id),
+        "authenticated": False,
+        "guest": True,
+        "messages_remaining": max(0, GUEST_MESSAGE_LIMIT - guest.message_count),
+        "message_limit": GUEST_MESSAGE_LIMIT,
     }
+
+
+@router.post("/guest-message")
+def consume_guest_message(request: Request) -> dict[str, int]:
+    token = request.cookies.get(GUEST_COOKIE)
+    if not token:
+        raise HTTPException(401, "guest session required")
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    with db_store.SessionLocal.begin() as db:
+        guest = db.scalar(select(GuestSessionRow).where(GuestSessionRow.token_hash == digest))
+        if guest is None or guest.expires_at <= utcnow_str():
+            raise HTTPException(401, "guest session expired")
+        changed = db.execute(update(GuestSessionRow).where(
+            GuestSessionRow.id == guest.id,
+            GuestSessionRow.message_count < GUEST_MESSAGE_LIMIT,
+        ).values(message_count=GuestSessionRow.message_count + 1)).rowcount
+        if not changed:
+            raise HTTPException(429, "Sign in or create an account to continue.", headers={"X-Assayer-Login-Required": "true"})
+        remaining = GUEST_MESSAGE_LIMIT - guest.message_count - 1
+    return {"messages_remaining": remaining}
+
+
+def _transfer_guest_rows(db, guest_id: str, user_id: str, workspace_id: str) -> None:
+    """Move only this browser's guest-owned records into the new account."""
+    for table in ("sessions", "connections", "etl_analyses", "runs"):
+        db.execute(__import__("sqlalchemy").text(
+            f"UPDATE {table} SET user_id=:uid, workspace_id=:wid WHERE user_id=:gid"
+        ), {"uid": user_id, "wid": workspace_id, "gid": guest_id})
+    for table in ("projects", "project_files"):
+        db.execute(__import__("sqlalchemy").text(
+            f"UPDATE {table} SET owner_id=:uid, workspace_id=:wid WHERE owner_id=:gid"
+        ), {"uid": user_id, "wid": workspace_id, "gid": guest_id})
+
+
+def _transfer_request_guest(db, request: Request, user_id: str, workspace_id: str) -> None:
+    token = request.cookies.get(GUEST_COOKIE)
+    if not token:
+        return
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    guest = db.scalar(select(GuestSessionRow).where(GuestSessionRow.token_hash == digest))
+    if guest and guest.expires_at > utcnow_str():
+        _transfer_guest_rows(db, guest.id, user_id, workspace_id)
+        db.delete(guest)
 
 
 @router.get("/google")
@@ -202,12 +271,18 @@ async def _finish_oidc(request: Request, provider: str):
     email = str(claims.get("email") or "").strip().lower()
     if not email or claims.get("email_verified") is not True:
         raise HTTPException(403, "identity provider did not verify the email address")
-    with db_store.SessionLocal() as db:
+    with db_store.SessionLocal.begin() as db:
         user = db.scalar(select(UserRow).where(UserRow.email == email))
         if user is None:
             raise HTTPException(403, "account not found; ask your administrator for access")
+        workspace = db.scalar(select(WorkspaceRow).join(
+            WorkspaceMemberRow, WorkspaceMemberRow.workspace_id == WorkspaceRow.id
+        ).where(WorkspaceMemberRow.user_id == user.id, WorkspaceRow.kind == "personal"))
+        if workspace:
+            _transfer_request_guest(db, request, user.id, workspace.id)
     response = RedirectResponse(settings.web_origin, status_code=303)
     _set_login_cookie(user, request, response)
+    response.delete_cookie(GUEST_COOKIE, path="/")
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -234,6 +309,7 @@ def bootstrap(body: BootstrapRequest, request: Request, response: Response) -> d
         db.add(WorkspaceMemberRow(
             id=new_id(), workspace_id=workspace.id, user_id=user.id, role="owner", created_at=utcnow_str()
         ))
+        _transfer_request_guest(db, request, user.id, workspace.id)
         # Adopt pre-login records into the first administrator's workspace.
         for table in ("sessions", "connections", "etl_analyses", "runs"):
             db.execute(__import__("sqlalchemy").text(f"UPDATE {table} SET user_id=:uid WHERE user_id IS NULL"), {"uid": user.id})
@@ -248,23 +324,67 @@ def bootstrap(body: BootstrapRequest, request: Request, response: Response) -> d
             created_at=utcnow_str(),
         ))
     response.set_cookie(COOKIE, token, httponly=True, secure=request.url.scheme == "https", samesite="lax", max_age=SESSION_DAYS * 86400, path="/")
+    response.delete_cookie(GUEST_COOKIE, path="/")
     return {"user": _user_dict(user), "workspace_id": workspace.id}
 
 
-@router.post("/login")
-def login(body: Credentials, request: Request, response: Response) -> dict[str, Any]:
-    with db_store.SessionLocal() as db:
-        user = db.scalar(select(UserRow).where(UserRow.email == str(body.email).lower()))
-        if user is None or not _verify_password(body.password, user.password_hash):
-            raise HTTPException(401, "email or password is incorrect")
+@router.post("/signup")
+def signup(body: SignupRequest, request: Request, response: Response) -> dict[str, Any]:
+    email = str(body.email).strip().lower()
+    with db_store.SessionLocal.begin() as db:
+        if db.scalar(select(UserRow.id).limit(1)) is None:
+            raise HTTPException(403, "administrator setup must be completed before account signup")
+        if db.scalar(select(UserRow.id).where(UserRow.email == email)) is not None:
+            raise HTTPException(409, "an account already exists for this email; sign in instead")
+        user = UserRow(
+            id=new_id(), email=email, display_name=body.name.strip(),
+            password_hash=_password_hash(body.password), role="member", created_at=utcnow_str(),
+            settings={"theme": "system", "instructions": ""},
+        )
+        workspace = WorkspaceRow(
+            id=new_id(), name=f"{user.display_name}'s workspace", owner_id=user.id,
+            kind="personal", settings={}, created_at=utcnow_str(),
+        )
+        db.add_all([user, workspace])
+        db.flush()
+        db.add(WorkspaceMemberRow(
+            id=new_id(), workspace_id=workspace.id, user_id=user.id, role="owner", created_at=utcnow_str()
+        ))
+        _transfer_request_guest(db, request, user.id, workspace.id)
         token = secrets.token_urlsafe(32)
         db.add(LoginSessionRow(
             id=new_id(), user_id=user.id, token_hash=hashlib.sha256(token.encode()).hexdigest(),
             expires_at=(datetime.now(UTC) + timedelta(days=SESSION_DAYS)).isoformat(), created_at=utcnow_str(),
         ))
-        db.commit()
+        user_data = _user_dict(user)
+        workspace_id = workspace.id
+    response.set_cookie(COOKIE, token, httponly=True, secure=request.url.scheme == "https",
+                        samesite="lax", max_age=SESSION_DAYS * 86400, path="/")
+    response.set_cookie("assayer_workspace", workspace_id, httponly=True, secure=request.url.scheme == "https",
+                        samesite="lax", max_age=SESSION_DAYS * 86400, path="/")
+    response.delete_cookie(GUEST_COOKIE, path="/")
+    return {"user": user_data, "workspace_id": workspace_id}
+
+
+@router.post("/login")
+def login(body: Credentials, request: Request, response: Response) -> dict[str, Any]:
+    with db_store.SessionLocal.begin() as db:
+        user = db.scalar(select(UserRow).where(UserRow.email == str(body.email).lower()))
+        if user is None or not _verify_password(body.password, user.password_hash):
+            raise HTTPException(401, "email or password is incorrect")
+        workspace = db.scalar(select(WorkspaceRow).join(
+            WorkspaceMemberRow, WorkspaceMemberRow.workspace_id == WorkspaceRow.id
+        ).where(WorkspaceMemberRow.user_id == user.id, WorkspaceRow.kind == "personal"))
+        if workspace:
+            _transfer_request_guest(db, request, user.id, workspace.id)
+        token = secrets.token_urlsafe(32)
+        db.add(LoginSessionRow(
+            id=new_id(), user_id=user.id, token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            expires_at=(datetime.now(UTC) + timedelta(days=SESSION_DAYS)).isoformat(), created_at=utcnow_str(),
+        ))
         user_data = _user_dict(user)
     response.set_cookie(COOKIE, token, httponly=True, secure=request.url.scheme == "https", samesite="lax", max_age=SESSION_DAYS * 86400, path="/")
+    response.delete_cookie(GUEST_COOKIE, path="/")
     return {"user": user_data}
 
 
@@ -401,6 +521,7 @@ def accept_invite(body: AcceptInviteRequest, request: Request, response: Respons
             role=invite.role, created_at=utcnow_str(),
         ))
         invite.accepted_at = utcnow_str()
+        _transfer_request_guest(db, request, user.id, invite.workspace_id)
         token = secrets.token_urlsafe(32)
         db.add(LoginSessionRow(
             id=new_id(), user_id=user.id, token_hash=hashlib.sha256(token.encode()).hexdigest(),

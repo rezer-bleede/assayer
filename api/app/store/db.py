@@ -134,6 +134,16 @@ class LoginSessionRow(Base):
     created_at: Mapped[str] = mapped_column(String(40), default="")
 
 
+class GuestSessionRow(Base):
+    __tablename__ = "guest_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    message_count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[str] = mapped_column(String(40), index=True)
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+
+
 class WorkspaceRow(Base):
     __tablename__ = "workspaces"
 

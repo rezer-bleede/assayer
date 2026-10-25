@@ -14,15 +14,15 @@ from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import settings
-from app.core.identity import user_id_context, workspace_id_context
+from app.core.identity import guest_id_context, user_id_context, workspace_id_context
 from app.core.llm import llm_available
 from app.core.logging import configure_logging, log
 from app.core.routes import SafeAPIRoute
 from app.routers import agent, auth, chat, connections, etl, projects, runs, threads
 from app.store import db as db_store
 from app.store.db import (
+    GuestSessionRow,
     LoginSessionRow,
-    UserRow,
     WorkspaceMemberRow,
     WorkspaceRow,
     utcnow_str,
@@ -63,6 +63,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Assayer-Messages-Remaining", "X-Assayer-Login-Required"],
 )
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, same_site="lax", https_only=settings.environment == "production")
 
@@ -82,18 +83,25 @@ async def require_account(request: Request, call_next):
     if (not app.state.auth_ready) or path.startswith(("/api/auth/", "/healthz", "/readyz", "/docs", "/openapi.json", "/redoc")):
         return await call_next(request)
     with db_store.SessionLocal() as db:
-        has_users = db.scalar(select(UserRow.id).limit(1)) is not None
-        if not has_users:
-            return ORJSONResponse({"detail": "initial administrator setup required"}, status_code=503)
         token = request.cookies.get("assayer_session")
         session = db.scalar(
             select(LoginSessionRow).where(
                 LoginSessionRow.token_hash == hashlib.sha256(token.encode()).hexdigest()
             )
         ) if token else None
-        if has_users and (session is None or session.expires_at <= utcnow_str()):
-            return ORJSONResponse({"detail": "sign in required"}, status_code=401)
-        user_id = session.user_id if session else None
+        guest = None
+        if session is None or session.expires_at <= utcnow_str():
+            session = None
+            guest_token = request.cookies.get("assayer_guest")
+            guest = db.scalar(select(GuestSessionRow).where(
+                GuestSessionRow.token_hash == hashlib.sha256(guest_token.encode()).hexdigest()
+            )) if guest_token else None
+            if guest is None or guest.expires_at <= utcnow_str():
+                return ORJSONResponse({"detail": "guest session required"}, status_code=401)
+        request.state.guest_id = guest.id if guest else None
+        if guest and (path.startswith("/api/projects") or path == "/api/threads/move"):
+            return ORJSONResponse({"detail": "sign in to use projects"}, status_code=401)
+        user_id = session.user_id if session else guest.id
         workspace_id = None
         if user_id:
             requested_workspace = request.cookies.get("assayer_workspace")
@@ -110,11 +118,13 @@ async def require_account(request: Request, call_next):
                 workspace_id = personal.id if personal else None
     marker = user_id_context.set(user_id)
     workspace_marker = workspace_id_context.set(workspace_id)
+    guest_marker = guest_id_context.set(guest.id if guest else None)
     try:
         return await call_next(request)
     finally:
         user_id_context.reset(marker)
         workspace_id_context.reset(workspace_marker)
+        guest_id_context.reset(guest_marker)
 
 
 @app.middleware("http")

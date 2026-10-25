@@ -17,6 +17,7 @@ from app.agent.openui import program_for_state, state_snapshot
 from app.agent.openui_author import author_program
 from app.core.logging import log
 from app.core.routes import SafeAPIRoute
+from app.routers.auth import consume_guest_message
 from app.routers.chat import EventBuffer, handle_turn
 from app.schemas import ChatMessage, ChatRole, ConnectionSpec, Question, RunResult, TestPlan, new_id
 from app.services.projects import project_context_for_session
@@ -168,6 +169,10 @@ async def _turn(session_id: str, text: str) -> tuple[str, ChatMessage | None]:
 async def agent(req: AgentRequest, request: Request) -> StreamingResponse:
     session_id = req.threadId or new_id()
     text = _latest_user_text(req.messages)
+    has_user_turn = any(str(message.get("role") or "") == "user" for message in req.messages)
+    guest_remaining: int | None = None
+    if has_user_turn and getattr(request.state, "guest_id", None):
+        guest_remaining = consume_guest_message(request)["messages_remaining"]
     message_id = new_id()
 
     if text:
@@ -211,5 +216,6 @@ async def agent(req: AgentRequest, request: Request) -> StreamingResponse:
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            **({"X-Assayer-Messages-Remaining": str(guest_remaining)} if guest_remaining is not None else {}),
         },
     )

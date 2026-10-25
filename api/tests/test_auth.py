@@ -99,3 +99,60 @@ def test_team_invite_is_one_time_and_creates_member(auth_client) -> None:
         "token": token, "name": "Teammate", "email": "teammate@example.com",
         "password": "another-secure-password-456",
     }).status_code == 400
+
+
+def test_guest_trial_is_limited_and_transfers_conversation(auth_client) -> None:
+    client = auth_client
+    client.post("/api/auth/bootstrap", json={
+        "name": "Admin", "email": "admin@example.com", "password": "long-secure-password-123",
+        "setup_token": "test-bootstrap-token-123456",
+    })
+    client.post("/api/auth/logout")
+    status = client.get("/api/auth/status")
+    assert status.json()["guest"] is True
+    assert status.json()["messages_remaining"] == 5
+
+    created = client.post("/api/sessions", json={})
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+
+    for expected in (4, 3, 2, 1, 0):
+        consumed = client.post("/api/auth/guest-message")
+        assert consumed.status_code == 200
+        assert consumed.json()["messages_remaining"] == expected
+    exhausted = client.post("/api/auth/guest-message")
+    assert exhausted.status_code == 429
+    assert exhausted.headers["x-assayer-login-required"] == "true"
+    blocked_turn = client.post("/agent", json={
+        "threadId": session_id, "messages": [{"role": "user", "content": "one more turn"}],
+    })
+    assert blocked_turn.status_code == 429
+
+    registered = client.post("/api/auth/signup", json={
+        "name": "Guest User", "email": "guest@example.com", "password": "guest-secure-password-123",
+    })
+    assert registered.status_code == 200
+    assert "assayer_session" in registered.cookies
+
+    from app.store import db
+    from app.store.db import SessionRow
+
+    with db.SessionLocal() as session:
+        row = session.get(SessionRow, session_id)
+        assert row is not None
+        assert row.user_id == registered.json()["user"]["id"]
+        assert row.workspace_id == registered.json()["workspace_id"]
+    assert client.get(f"/api/sessions/{session_id}/messages").status_code == 200
+
+
+def test_guest_data_is_separated_between_visitors(auth_client) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    guest_one = auth_client
+    guest_one.get("/api/auth/status")
+    guest_one.post("/api/threads/create", json={"messages": [{"role": "user", "content": "private"}]})
+    guest_two = TestClient(app)
+    guest_two.get("/api/auth/status")
+    assert guest_two.get("/api/threads/get").json()["threads"] == []

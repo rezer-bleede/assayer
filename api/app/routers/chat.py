@@ -25,11 +25,11 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.agent.plan_builder import build_plan
 from app.agent.planner import find_unresolved
-from app.core.identity import user_id_context, workspace_id_context
+from app.core.identity import guest_id_context, user_id_context, workspace_id_context
 from app.core.logging import log
 from app.core.routes import SafeAPIRoute
 from app.parsers import analyze_etl
@@ -64,7 +64,14 @@ from app.services.projects import project_context_for_session
 from app.services.source_filter import profile_summary
 from app.store import db as db_store
 from app.store import repository as repo
-from app.store.db import LoginSessionRow, UserRow, WorkspaceMemberRow, WorkspaceRow, utcnow_str
+from app.store.db import (
+    GuestSessionRow,
+    LoginSessionRow,
+    UserRow,
+    WorkspaceMemberRow,
+    WorkspaceRow,
+    utcnow_str,
+)
 
 router = APIRouter(tags=["chat"], route_class=SafeAPIRoute)
 
@@ -794,19 +801,22 @@ def _is_affirmative(text: str) -> bool:
 @router.websocket("/ws/chat")
 async def ws_chat(ws: WebSocket) -> None:
     token = ws.cookies.get("assayer_session")
-    if not token:
-        await ws.close(code=4401, reason="sign in required")
-        return
     import hashlib
 
     with db_store.SessionLocal() as db:
         session = db.scalar(select(LoginSessionRow).where(
             LoginSessionRow.token_hash == hashlib.sha256(token.encode()).hexdigest()
-        ))
+        )) if token else None
+        guest = None
         if session is None or session.expires_at <= utcnow_str() or db.get(UserRow, session.user_id) is None:
-            await ws.close(code=4401, reason="session expired")
-            return
-        user_id = session.user_id
+            guest_token = ws.cookies.get("assayer_guest")
+            guest = db.scalar(select(GuestSessionRow).where(
+                GuestSessionRow.token_hash == hashlib.sha256(guest_token.encode()).hexdigest()
+            )) if guest_token else None
+            if guest is None or guest.expires_at <= utcnow_str():
+                await ws.close(code=4401, reason="guest or sign-in session required")
+                return
+        user_id = session.user_id if session and db.get(UserRow, session.user_id) is not None else guest.id
         workspace_id: str | None = None
         requested = ws.cookies.get("assayer_workspace")
         membership = db.scalar(select(WorkspaceMemberRow).where(
@@ -821,6 +831,7 @@ async def ws_chat(ws: WebSocket) -> None:
             workspace_id = personal.id if personal else None
     user_marker = user_id_context.set(user_id)
     workspace_marker = workspace_id_context.set(workspace_id)
+    guest_marker = guest_id_context.set(guest.id if guest else None)
     session_id: str | None = None
 
     async def send(event: str, data: dict[str, Any]) -> None:
@@ -861,6 +872,19 @@ async def ws_chat(ws: WebSocket) -> None:
             text = str(msg.get("content") or "").strip()
             action = msg.get("action")
             body = msg.get("payload") or {}
+
+            if guest and (text or action):
+                from app.routers.auth import GUEST_MESSAGE_LIMIT
+
+                with db_store.SessionLocal.begin() as db:
+                    changed = db.execute(update(GuestSessionRow).where(
+                        GuestSessionRow.id == guest.id,
+                        GuestSessionRow.message_count < GUEST_MESSAGE_LIMIT,
+                    ).values(message_count=GuestSessionRow.message_count + 1)).rowcount
+                    if not changed:
+                        await send("error", {"code": "login_required", "message": "Sign in or create an account to continue."})
+                        await ws.close(code=4429, reason="login required")
+                        return
 
             if text:
                 # never persist a raw credential into replayable history
@@ -910,6 +934,7 @@ async def ws_chat(ws: WebSocket) -> None:
     finally:
         user_id_context.reset(user_marker)
         workspace_id_context.reset(workspace_marker)
+        guest_id_context.reset(guest_marker)
 
 
 _CRED_ECHO = re.compile(r"(\w+://[^:/@\s]+:)([^@\s]+)(@)")

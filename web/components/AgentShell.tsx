@@ -24,7 +24,15 @@ import { ProjectNudge } from '@/components/ProjectNudge';
 const llm = fetchLLM({
   url: `${API_URL}/agent`,
   streamAdapter: agUIAdapter(),
-  fetch: (input, init) => fetch(input, { ...init, credentials: 'include' }),
+  fetch: async (input, init) => {
+    const response = await fetch(input, { ...init, credentials: 'include' });
+    const remaining = response.headers.get('X-Assayer-Messages-Remaining');
+    if (remaining !== null) window.dispatchEvent(new CustomEvent('assayer:guest-count', { detail: Number(remaining) }));
+    if (response.status === 429 && response.headers.get('X-Assayer-Login-Required')) {
+      window.dispatchEvent(new CustomEvent('assayer:login-required'));
+    }
+    return response;
+  },
 });
 
 const threadStorage = projectAwareStorage();
