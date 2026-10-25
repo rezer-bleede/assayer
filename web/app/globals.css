@@ -59,6 +59,50 @@ body {
   height: 100%;
 }
 
+.assayer-brand-mark {
+  display: block;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 2px 7px rgb(56 189 248 / 18%));
+}
+
+.assayer-brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.assayer-brand-name {
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.045em;
+}
+
+.assayer-brand-tagline {
+  color: rgb(var(--muted));
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+}
+
+.openui-agent-welcome-screen__image-container img {
+  width: 76px !important;
+  height: 76px !important;
+  object-fit: contain !important;
+  filter: drop-shadow(0 8px 20px rgb(56 189 248 / 18%));
+}
+
+.openui-agent-welcome-screen__title {
+  letter-spacing: -0.045em;
+}
+
+.openui-agent-welcome-screen__description {
+  max-width: 540px;
+  text-wrap: pretty;
+}
+
 body {
   background: rgb(var(--bg));
   color: rgb(var(--fg));

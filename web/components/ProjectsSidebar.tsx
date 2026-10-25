@@ -68,7 +68,15 @@ export function ProjectsSidebar({
   return (
     <>
       <div className="openui-agent-sidebar-actions">
-        <AgentInterface.SidebarHeader />
+        <AgentInterface.SidebarHeader
+          logo={<img src="/logo.svg" alt="" className="assayer-brand-mark" />}
+          agentName={
+            <span className="assayer-brand-copy">
+              <span className="assayer-brand-name">assayer</span>
+              <span className="assayer-brand-tagline">Agentic testing &amp; QA</span>
+            </span>
+          }
+        />
         <div className="openui-agent-sidebar-primary-actions">
           <AgentInterface.NewChatButton />
         </div>

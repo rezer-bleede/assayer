@@ -112,91 +112,43 @@ if (require.main === module) {
   const textMid = [148, 163, 244, 255];   // #94a3b8 slate-400
   
   function drawLogo(buf, w, h) {
-    // Fill background
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4;
-        buf[i] = bgColor[0];
-        buf[i + 1] = bgColor[1];
-        buf[i + 2] = bgColor[2];
-        buf[i + 3] = bgColor[3];
-      }
-    }
-    
-    // Rounded rect bg (simpler: just fill center)
-    const cx = w / 2, cy = h / 2, r = h * 0.45;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const dx = x - cx, dy = y - cy;
-        if (dx * dx + dy * dy <= r * r) {
-          const i = (y * w + x) * 4;
-          buf[i] = 15; buf[i + 1] = 23; buf[i + 2] = 42; buf[i + 3] = 255;
+    // Draw at 4x then downsample so the transparent mark stays crisp at 16px.
+    const scale = 4, unit = (w / 64) * scale, sw = w * scale, sh = h * scale;
+    const high = Buffer.alloc(sw * sh * 4);
+    const mark = [56, 189, 248, 255], check = [34, 211, 238, 255];
+    const muted = [148, 163, 184, 255], outline = [15, 23, 42, 255];
+    const paint = (x, y, color) => {
+      const i = (y * sw + x) * 4;
+      high[i] = color[0]; high[i + 1] = color[1]; high[i + 2] = color[2]; high[i + 3] = color[3];
+    };
+    const line = (x1, y1, x2, y2, width, color) => {
+      x1 *= unit; y1 *= unit; x2 *= unit; y2 *= unit; width *= unit;
+      const dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
+      for (let y = Math.max(0, Math.floor(Math.min(y1, y2) - width)); y < Math.min(sh, Math.ceil(Math.max(y1, y2) + width)); y++)
+        for (let x = Math.max(0, Math.floor(Math.min(x1, x2) - width)); x < Math.min(sw, Math.ceil(Math.max(x1, x2) + width)); x++) {
+          const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2));
+          if (Math.hypot(x - x1 - t * dx, y - y1 - t * dy) <= width / 2) paint(x, y, color);
         }
+    };
+    const circle = (cx, cy, radius, width, color) => {
+      cx *= unit; cy *= unit; radius *= unit; width *= unit;
+      for (let y = Math.max(0, Math.floor(cy - radius - width)); y < Math.min(sh, Math.ceil(cy + radius + width)); y++)
+        for (let x = Math.max(0, Math.floor(cx - radius - width)); x < Math.min(sw, Math.ceil(cx + radius + width)); x++)
+          if (Math.abs(Math.hypot(x - cx, y - cy) - radius) <= width / 2) paint(x, y, color);
+    };
+    [[10,22,22,22],[10,32,18,32],[10,42,22,42]].forEach(([x1,y1,x2,y2]) => line(x1,y1,x2,y2,4,muted));
+    circle(37, 29, 17, 8, outline); circle(37, 29, 17, 5, mark);
+    line(30,29,35,34,7,outline); line(35,34,44,24,7,outline);
+    line(30,29,35,34,4,check); line(35,34,44,24,4,check);
+    line(49,42,58,52,9,outline); line(49,42,58,52,5,mark);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const sum = [0,0,0,0];
+      for (let sy = 0; sy < scale; sy++) for (let sx = 0; sx < scale; sx++) {
+        const i = (((y * scale + sy) * sw) + x * scale + sx) * 4;
+        for (let c = 0; c < 4; c++) sum[c] += high[i + c];
       }
-    }
-    
-    // Draw a Q shape
-    // Outer ring
-    const cx2 = w / 2, cy2 = h / 2;
-    const rOuter = h * 0.28, rInner = h * 0.20;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const dx = x - cx2, dy = y - cy2;
-        const d2 = dx * dx + dy * dy;
-        if (d2 <= rOuter * rOuter && d2 >= rInner * rInner) {
-          const i = (y * w + x) * 4;
-          buf[i] = 56; buf[i + 1] = 189; buf[i + 2] = 245; buf[i + 3] = 255;
-        }
-      }
-    }
-    
-    // Tail of Q
-    for (let y = cy2 + rOuter * 0.6; y < cy2 + rOuter * 0.9; y++) {
-      for (let x = cx2 + rOuter * 0.4; x < cx2 + rOuter * 0.8; x++) {
-        if (x >= 0 && x < w && y >= 0 && y < h) {
-          const i = (y * w + x) * 4;
-          buf[i] = 56; buf[i + 1] = 189; buf[i + 2] = 245; buf[i + 3] = 255;
-        }
-      }
-    }
-    
-    // Checkmark
-    const cx3 = w * 0.62, cy3 = h * 0.62;
-    const checkPoints = [
-      [cx3 - rOuter * 0.15, cy2 + rOuter * 0.15],
-      [cx2 + rOuter * 0.05, cy2 + rOuter * 0.45],
-      [cx2 + rOuter * 0.55, cy2 - rOuter * 0.15]
-    ];
-    for (let i = 0; i < checkPoints.length - 1; i++) {
-      const [x1, y1] = checkPoints[i];
-      const [x2, y2] = checkPoints[i + 1];
-      const dx = x2 - x1, dy = y2 - y1;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      const steps = Math.max(len, 1);
-      for (let s = 0; s <= steps; s++) {
-        const t = s / steps;
-        const x = x1 + dx * t, y = y1 + dy * t;
-        const ix = Math.round(x), iy = Math.round(y);
-        if (ix >= 0 && ix < w && iy >= 0 && iy < h) {
-          const pi = (iy * w + ix) * 4;
-          buf[pi] = 34; buf[pi + 1] = 211; buf[pi + 2] = 238; buf[pi + 3] = 255;
-        }
-      }
-    }
-    
-    // Draw data table rows on left side of Q
-    const rowY = [cy2 - rOuter * 0.5, cy2 - rOuter * 0.2, cy2 + rOuter * 0.1];
-    const rowX = cx2 - rOuter * 0.6;
-    const rowW = rOuter * 0.9;
-    for (const ry of rowY) {
-      for (let x = rowX; x < rowX + rowW; x++) {
-        for (let y = ry - 1; y <= ry + 1; y++) {
-          if (x >= 0 && x < w && y >= 0 && y < h) {
-            const i = (y * w + x) * 4;
-            buf[i] = 226; buf[i + 1] = 232; buf[i + 2] = 240; buf[i + 3] = 255;
-          }
-        }
-      }
+      const out = (y * w + x) * 4;
+      for (let c = 0; c < 4; c++) buf[out + c] = Math.round(sum[c] / (scale * scale));
     }
   }
   

@@ -65,10 +65,20 @@ export default function AgentShell() {
       agentName="assayer"
       logoUrl="/logo.svg"
       starters={starters}
+      starterVariant="card"
       theme={{ mode: theme }}
       path={navPath}
       onNavigate={setNavPath}
     >
+      <AgentInterface.Welcome
+        title="Confidence in every release."
+        description="Test your data, pipelines, and product with an AI QA partner that turns questions into clear, actionable results."
+        image={{ url: '/logo.svg' }}
+        starters={starters}
+        starterVariant="card"
+        startersTabLabel="What would you like to test?"
+        glowAnimation
+      />
       <AgentInterface.Sidebar>
         <ProjectsSidebar
           theme={theme}
