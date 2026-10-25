@@ -69,8 +69,19 @@ body {
 
 .assayer-brand-copy {
   display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.assayer-brand-text {
+  display: flex;
   flex-direction: column;
   gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   line-height: 1.1;
 }
 
@@ -85,6 +96,70 @@ body {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.015em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.openui-agent-container:not(.openui-agent-container--mobile)
+  .openui-agent-sidebar-primary-actions
+  .openui-agent-new-chat-button:not(.openui-agent-new-chat-button--collapsed) {
+  height: 32px;
+  margin-top: 0;
+  margin-bottom: 0;
+  gap: var(--openui-space-2xs);
+}
+
+.openui-agent-container:not(.openui-agent-container--mobile)
+  .openui-agent-sidebar-primary-actions
+  .openui-agent-new-chat-button:not(.openui-agent-new-chat-button--collapsed)
+  .openui-agent-new-chat-button__icon {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  font-size: 16px;
+}
+
+.assayer-project-sidebar-item .openui-agent-sidebar-item__trailing,
+.assayer-chat-sidebar-item .openui-agent-sidebar-item__trailing {
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.assayer-sidebar-action {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.assayer-sidebar-action:hover {
+  background: rgb(var(--fg) / 7%);
+}
+
+.assayer-sidebar-action:focus-visible {
+  outline: 2px solid rgb(var(--accent) / 70%);
+  outline-offset: 1px;
+}
+
+.openui-agent-sidebar-container--collapsed
+  .assayer-project-sidebar-item
+  .openui-agent-sidebar-item__trailing,
+.openui-agent-sidebar-container--collapsed
+  .assayer-chat-sidebar-item
+  .openui-agent-sidebar-item__trailing {
+  width: 0;
+  min-width: 0;
+  height: 0;
 }
 
 .openui-agent-welcome-screen__image-container img {

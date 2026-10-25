@@ -12,7 +12,7 @@ import { AgentInterface, useNav, useThreadList } from '@openuidev/react-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProjects, type ThreadWithProject } from '@/lib/projects';
 import type { Theme } from '@/lib/theme';
-import { FolderIcon, GearIcon, PlusIcon, TrashIcon } from './icons';
+import { FolderIcon, GearIcon, MessageIcon, PlusIcon, TrashIcon } from './icons';
 
 export function ProjectsSidebar({
   onOpenSettings,
@@ -69,11 +69,21 @@ export function ProjectsSidebar({
     <>
       <div className="openui-agent-sidebar-actions">
         <AgentInterface.SidebarHeader
-          logo={<img src="/logo.svg" alt="" className="assayer-brand-mark" />}
+          className="assayer-sidebar-header"
+          logo={
+            <img
+              src="/logo.svg"
+              alt=""
+              className="assayer-brand-mark openui-agent-sidebar-header__logo"
+            />
+          }
           agentName={
-            <span className="assayer-brand-copy">
-              <span className="assayer-brand-name">assayer</span>
-              <span className="assayer-brand-tagline">Agentic testing &amp; QA</span>
+            <span className="assayer-brand-copy openui-agent-sidebar-header__agent-name">
+              <img src="/logo.svg" alt="" className="assayer-brand-mark" />
+              <span className="assayer-brand-text">
+                <span className="assayer-brand-name">assayer</span>
+                <span className="assayer-brand-tagline">Agentic testing &amp; QA</span>
+              </span>
             </span>
           }
         />
@@ -139,6 +149,7 @@ export function ProjectsSidebar({
         {projects.map((p) => (
           <AgentInterface.SidebarItem
             key={p.id}
+            className="assayer-project-sidebar-item"
             icon={<FolderIcon style={{ fontSize: 14 }} />}
             selected={activeProjectId === p.id}
             onClick={() => {
@@ -162,7 +173,7 @@ export function ProjectsSidebar({
                     nav.navigate(`/project/${p.id}`);
                   }
                 }}
-                className="inline-flex rounded p-0.5 text-muted hover:text-fg"
+                className="assayer-sidebar-action text-muted hover:text-fg"
               >
                 <GearIcon style={{ fontSize: 13 }} />
               </span>
@@ -183,6 +194,8 @@ export function ProjectsSidebar({
         {visible.map((t) => (
           <AgentInterface.SidebarItem
             key={t.id}
+            className="assayer-chat-sidebar-item"
+            icon={<MessageIcon style={{ fontSize: 14 }} />}
             selected={selectedThreadId === t.id}
             onClick={() => openThread(t.id)}
             trailing={
@@ -200,7 +213,7 @@ export function ProjectsSidebar({
                     if (window.confirm(`Delete ${t.title}?`)) deleteThread(t.id);
                   }
                 }}
-                className="inline-flex rounded p-0.5 text-muted/60 hover:text-fail"
+                className="assayer-sidebar-action text-muted/60 hover:text-fail"
               >
                 <TrashIcon style={{ fontSize: 13 }} />
               </span>
