@@ -103,6 +103,24 @@ export const api = {
     req<Project>(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteProject: (id: string) => reqVoid(`/api/projects/${id}`, { method: 'DELETE' }),
   projectDetail: (id: string) => req<ProjectDetail>(`/api/projects/${id}`),
+  integrations: () => req<{ integrations: Integration[] }>('/api/integrations'),
+  githubRepositories: (id: string) => req<{ repositories: GitHubRepository[] }>(`/api/integrations/github/${encodeURIComponent(id)}/repositories`),
+  projectRepositories: (id: string) => req<{ repositories: ProjectRepository[] }>(`/api/integrations/projects/${encodeURIComponent(id)}/repositories`),
+  addProjectRepository: (projectId: string, integrationId: string, repository: string) =>
+    req<ProjectRepository>(`/api/integrations/projects/${encodeURIComponent(projectId)}/repositories`, {
+      method: 'POST', body: JSON.stringify({ integration_id: integrationId, repository }),
+    }),
+  removeProjectRepository: (projectId: string, bindingId: string) =>
+    reqVoid(`/api/integrations/projects/${encodeURIComponent(projectId)}/repositories/${encodeURIComponent(bindingId)}`, { method: 'DELETE' }),
+  disconnectGitHub: (integrationId: string) =>
+    reqVoid(`/api/integrations/github/${encodeURIComponent(integrationId)}`, { method: 'DELETE' }),
+  runDestinations: (runId: string) =>
+    req<{ destinations: IntegrationDestination[] }>(`/api/integrations/runs/${encodeURIComponent(runId)}/destinations`),
+  previewGitHubIssue: (payload: { integration_id: string; run_id: string; repository: string; title: string; body: string }) =>
+    req<GitHubIssueDraft>('/api/integrations/github/issues/preview', { method: 'POST', body: JSON.stringify(payload) }),
+  confirmIntegrationAction: (actionId: string, title: string, body: string) =>
+    req<{ status: string; url: string; title: string; number: number }>(`/api/integrations/actions/${encodeURIComponent(actionId)}/confirm`, { method: 'POST', body: JSON.stringify({ title, body }) }),
+  connectGitHub: () => { window.location.assign(`${API_URL}/api/integrations/github/connect`); },
   projectFiles: (id: string) => req<{ files: ProjectFile[] }>(`/api/projects/${id}/files`),
   uploadProjectFiles: async (id: string, files: File[]): Promise<{ files: ProjectFile[]; rejected: { name: string; reason: string }[] }> => {
     const form = new FormData();
@@ -127,6 +145,12 @@ export const api = {
       body: JSON.stringify({ threadId, projectId }),
     }),
 };
+
+export type Integration = { id: string; provider: string; account_id: string; account_name: string; created_at: string };
+export type GitHubRepository = { id: string; full_name: string; private: boolean; html_url: string; default_branch: string };
+export type ProjectRepository = { id: string; integration_id: string; repository: string; name: string };
+export type IntegrationDestination = { integration_id: string; repository: string; account_name: string };
+export type GitHubIssueDraft = { id: string; status: string; repository: string; title: string; body: string; run_id: string; run_url: string };
 
 export type FromUrlBody = {
   url: string;

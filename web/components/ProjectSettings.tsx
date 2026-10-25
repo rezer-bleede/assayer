@@ -7,7 +7,7 @@
 
 import { useNav, useThreadList } from '@openuidev/react-ui';
 import { useCallback, useEffect, useState } from 'react';
-import { api, type ProjectDetail } from '@/lib/api';
+import { api, type GitHubRepository, type Integration, type ProjectDetail, type ProjectRepository } from '@/lib/api';
 import { useProjects } from '@/lib/projects';
 import { BackIcon, FileIcon, TrashIcon } from './icons';
 
@@ -33,6 +33,10 @@ export function ProjectSettings({ projectId, onBack }: { projectId: string; onBa
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [repositories, setRepositories] = useState<Record<string, GitHubRepository[]>>({});
+  const [projectRepositories, setProjectRepositories] = useState<ProjectRepository[]>([]);
+  const [selectedRepository, setSelectedRepository] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -40,6 +44,15 @@ export function ProjectSettings({ projectId, onBack }: { projectId: string; onBa
       setDetail(d);
       setName(d.name);
       setInstructions(d.instructions);
+      const [connected, linked] = await Promise.all([api.integrations(), api.projectRepositories(projectId)]);
+      const github = connected.integrations.filter((item) => item.provider === 'github');
+      setIntegrations(github);
+      setProjectRepositories(linked.repositories);
+      const repoResults = await Promise.all(github.map(async (item) => {
+        try { return [item.id, (await api.githubRepositories(item.id)).repositories] as const; }
+        catch { return [item.id, []] as const; }
+      }));
+      setRepositories(Object.fromEntries(repoResults));
     } catch (e) {
       setNotice((e as Error).message);
     }
@@ -143,6 +156,52 @@ export function ProjectSettings({ projectId, onBack }: { projectId: string; onBa
         <div className="mb-6 mt-1 flex items-center gap-2 text-[11.5px] text-muted">
           {busy ? <span>saving…</span> : null}
           {!busy && savedAt ? <span>saved at {savedAt}</span> : null}
+        </div>
+
+        <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted">
+          GitHub repositories
+        </label>
+        <p className="mb-3 text-[12.5px] text-muted">
+          Repositories enabled here can provide pull-request context in project chats and receive approved QA issues.
+        </p>
+        <div className="mb-3 space-y-2">
+          {projectRepositories.map((binding) => (
+            <div key={binding.id} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[13px]">
+              <span className="min-w-0 flex-1 truncate">{binding.repository}</span>
+              <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={async () => {
+                try { await api.removeProjectRepository(projectId, binding.id); setProjectRepositories((all) => all.filter((item) => item.id !== binding.id)); }
+                catch (e) { setNotice((e as Error).message); }
+              }}>Remove</button>
+            </div>
+          ))}
+          {!projectRepositories.length && <p className="text-[12px] text-muted">No repositories enabled for this project.</p>}
+        </div>
+        {integrations.map((integration) => {
+          const available = repositories[integration.id] ?? [];
+          return <div key={integration.id} className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted">{integration.account_name}</span>
+            <select className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-2 text-xs" value={selectedRepository[integration.id] ?? ''} onChange={(e) => setSelectedRepository((current) => ({ ...current, [integration.id]: e.target.value }))}>
+              <option value="">Choose a repository…</option>
+              {available.filter((r) => !projectRepositories.some((p) => p.repository === r.full_name)).map((r) => <option key={r.id} value={r.full_name}>{r.full_name}{r.private ? ' · private' : ''}</option>)}
+            </select>
+            <button type="button" disabled={busy || !selectedRepository[integration.id]} className="btn-ghost !px-3 !py-2 text-xs" onClick={async () => {
+              setBusy(true);
+              try {
+                const added = await api.addProjectRepository(projectId, integration.id, selectedRepository[integration.id]);
+                setProjectRepositories((all) => [...all, added]);
+                setSelectedRepository((current) => ({ ...current, [integration.id]: '' }));
+                setNotice(null);
+              } catch (e) { setNotice((e as Error).message); }
+              finally { setBusy(false); }
+            }}>Add</button>
+          </div>;
+        })}
+        <div className="mb-7 flex flex-wrap gap-2">
+          <button type="button" className="btn-ghost !px-3 !py-2 text-xs" onClick={api.connectGitHub}>Connect GitHub</button>
+          {integrations.map((integration) => <button key={integration.id} type="button" className="btn-ghost !px-3 !py-2 text-xs text-fail" onClick={async () => {
+            try { await api.disconnectGitHub(integration.id); await refresh(); }
+            catch (e) { setNotice((e as Error).message); }
+          }}>Disconnect {integration.account_name}</button>)}
         </div>
 
         <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted">

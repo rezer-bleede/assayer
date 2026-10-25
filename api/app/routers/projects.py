@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from app.core.logging import log
 from app.core.routes import SafeAPIRoute
+from app.services import integrations as integration_service
 from app.services import projects as project_service
 from app.store import repository as repo
 
@@ -65,6 +66,7 @@ def update_project(project_id: str, req: UpdateProjectRequest) -> dict[str, Any]
 
 @router.delete("/{project_id}", status_code=204)
 def delete_project(project_id: str) -> None:
+    integration_service.delete_project_repositories(project_id)
     if not repo.delete_project(project_id):
         raise HTTPException(404, "project not found")
 

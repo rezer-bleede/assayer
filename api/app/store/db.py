@@ -187,6 +187,53 @@ class WorkspaceInviteRow(Base):
     created_at: Mapped[str] = mapped_column(String(40), default="")
 
 
+class IntegrationRow(Base):
+    """Encrypted provider credentials owned by one user in one workspace."""
+
+    __tablename__ = "integrations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32), index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), index=True)
+    account_id: Mapped[str] = mapped_column(String(128), default="")
+    account_name: Mapped[str] = mapped_column(String(255), default="")
+    encrypted_credentials: Mapped[str] = mapped_column(String(8192))
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+    updated_at: Mapped[str] = mapped_column(String(40), default="")
+
+
+class ProjectIntegrationRow(Base):
+    """Provider resource explicitly enabled for a project."""
+
+    __tablename__ = "project_integrations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    integration_id: Mapped[str] = mapped_column(String(64), index=True)
+    resource_id: Mapped[str] = mapped_column(String(512))
+    resource_name: Mapped[str] = mapped_column(String(512), default="")
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+
+
+class IntegrationActionRow(Base):
+    """Preview-first external write awaiting explicit user confirmation."""
+
+    __tablename__ = "integration_actions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    integration_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    action: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+    updated_at: Mapped[str] = mapped_column(String(40), default="")
+
+
 def _engine_kwargs(url: str) -> dict:
     kwargs: dict = {"pool_pre_ping": True, "future": True}
     if url.startswith("postgresql"):
@@ -304,6 +351,9 @@ __all__ = [
     "ChatMessageRow",
     "ProjectRow",
     "ProjectFileRow",
+    "IntegrationRow",
+    "ProjectIntegrationRow",
+    "IntegrationActionRow",
     "engine",
     "SessionLocal",
     "session_scope",

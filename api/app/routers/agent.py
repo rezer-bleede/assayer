@@ -20,6 +20,7 @@ from app.core.routes import SafeAPIRoute
 from app.routers.auth import consume_guest_message
 from app.routers.chat import EventBuffer, handle_turn
 from app.schemas import ChatMessage, ChatRole, ConnectionSpec, Question, RunResult, TestPlan, new_id
+from app.services.integrations import project_context_for_session as github_context_for_session
 from app.services.projects import project_context_for_session
 from app.store import repository as repo
 
@@ -134,6 +135,9 @@ async def _turn(session_id: str, text: str) -> tuple[str, ChatMessage | None]:
     await asyncio.to_thread(repo.ensure_session, session_id)
 
     project_context = project_context_for_session(session_id)
+    github_context = await github_context_for_session(session_id, text)
+    if github_context:
+        project_context = "\n\n".join(part for part in (project_context, github_context) if part)
 
     try:
         outcome = await handle_turn(session_id, text, emit=buf, project_context=project_context)

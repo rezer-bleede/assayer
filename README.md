@@ -379,6 +379,35 @@ WebSocket; it uses two small protocols:
   and `GET /api/threads/get` returns it; a filed chat's instructions and
   knowledge files are folded into the agent's prompts for every turn.
 
+### GitHub integration (initial connector)
+
+Assayer can connect a user's GitHub account, enable repositories for a project,
+use explicitly referenced pull requests as cited planning context, and publish
+run findings as GitHub issues after a preview and explicit confirmation. The
+GitHub account connection is private to the author in the active workspace;
+projects only expose repositories that the connected user explicitly enables.
+
+1. Register a GitHub OAuth App with callback
+   `http://localhost:8010/api/integrations/github/callback` (adjust for your
+   deployment).
+2. Set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and
+   `GITHUB_REDIRECT_URI` in `.env`, set `API_PUBLIC_URL` to the externally
+   reachable API origin for published-run links, then restart the API.
+3. Open a project's settings, choose **Connect GitHub**, authorize the
+   requested `repo` and `read:user` access, then enable one or more repositories.
+4. In a chat filed to that project, include an authorized PR URL to use its
+   title, description, and changed-file patches as source context.
+5. After a run, select an enabled repository, preview/edit the issue, and
+   confirm before Assayer creates it.
+
+OAuth tokens are encrypted in the state database using a key derived from
+`SECRET_KEY`. Rotating `SECRET_KEY` invalidates stored integration credentials;
+users can reconnect the provider. The OAuth App's `repo` scope grants broad
+private-repository access; use a GitHub App with narrower repository and issue
+permissions for production deployments. GitHub App installation auth, Linear, Asana,
+remote MCP, and webhook-triggered workflows are planned extensions to the
+shared integration runtime.
+
 The legacy `WS /ws/chat` loop still exists for scripted/older clients: send
 `{"session_id": "...", "content": "...", "action": "approve"}` and receive
 `message`, `plan.ready`, `check.completed`, `run.completed` events.

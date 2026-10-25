@@ -18,7 +18,7 @@ from app.core.identity import guest_id_context, user_id_context, workspace_id_co
 from app.core.llm import llm_available
 from app.core.logging import configure_logging, log
 from app.core.routes import SafeAPIRoute
-from app.routers import agent, auth, chat, connections, etl, projects, runs, threads
+from app.routers import agent, auth, chat, connections, etl, integrations, projects, runs, threads
 from app.store import db as db_store
 from app.store.db import (
     GuestSessionRow,
@@ -74,6 +74,7 @@ app.include_router(chat.router)
 app.include_router(agent.router)
 app.include_router(threads.router)
 app.include_router(projects.router)
+app.include_router(integrations.router)
 app.include_router(auth.router)
 
 

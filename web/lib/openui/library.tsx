@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { defineComponent, useTriggerAction } from '@openuidev/react-lang';
 import { useThreadList } from '@openuidev/react-headless';
 import { openuiChatLibrary } from '@openuidev/react-ui/genui-lib';
@@ -11,6 +11,7 @@ import {
   connectFromUrlStream,
   repairPatch,
   type ConnectResponse,
+  type IntegrationDestination,
   type RepairPatch,
 } from '@/lib/api';
 import {
@@ -612,6 +613,17 @@ function ReportView({ props }: { props: z.infer<typeof reportSchema> }) {
   const trigger = useTriggerAction();
   const [tab, setTab] = useState<'failed' | 'passed' | 'all'>('failed');
   const [open, setOpen] = useState<string | null>(null);
+  const [destinations, setDestinations] = useState<IntegrationDestination[]>([]);
+  const [destination, setDestination] = useState('');
+  const [draft, setDraft] = useState<{ id: string; title: string; body: string; repository: string } | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
+  useEffect(() => {
+    let active = true;
+    void api.runDestinations(props.runId).then((result) => { if (active) setDestinations(result.destinations); }).catch(() => {});
+    return () => { active = false; };
+  }, [props.runId]);
   const rows = props.checks ?? [];
   const filtered = tab === 'all' ? rows : rows.filter((r) => (tab === 'failed' ? r.status === 'failed' || r.status === 'error' : r.status === 'passed'));
   const overall = Number.isFinite(props.score) ? props.score : 0;
@@ -645,6 +657,43 @@ function ReportView({ props }: { props: z.infer<typeof reportSchema> }) {
         </div>
       </header>
       {props.summary && <p className="border-b px-4 py-2 text-[12.5px] text-muted">{props.summary}</p>}
+      {destinations.length > 0 && <div className="border-b px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium">Publish findings</span>
+          <select className="min-w-48 rounded-md border border-border bg-surface px-2 py-1.5 text-xs" value={destination} onChange={(e) => { setDestination(e.target.value); setDraft(null); setPublishedUrl(''); }}>
+            <option value="">Choose GitHub repository…</option>
+            {destinations.map((item) => <option key={`${item.integration_id}:${item.repository}`} value={`${item.integration_id}:${item.repository}`}>{item.repository}</option>)}
+          </select>
+          <button type="button" disabled={!destination || publishing} className="btn-ghost !px-2.5 !py-1.5 !text-xs" onClick={async () => {
+            const target = destinations.find((item) => `${item.integration_id}:${item.repository}` === destination);
+            if (!target) return;
+            setPublishing(true); setPublishError(''); setPublishedUrl('');
+            const failed = rows.filter((row) => row.status === 'failed' || row.status === 'error');
+            const title = `QA findings: ${failed.length} issue${failed.length === 1 ? '' : 's'} (score ${overall.toFixed(1)})`;
+            const body = [`## Assayer QA findings`, `Score: **${overall.toFixed(1)}/100**`, `Run: ${API_URL}/api/runs/${props.runId}/report`, '',
+              ...failed.map((row) => `### ${row.severity.toUpperCase()} — ${row.name}\n- Status: ${row.status}\n- Target: ${row.url || row.table}${row.column ? `.${row.column}` : ''}\n- Expected: ${String(row.expected ?? '—')}\n- Observed: ${typeof row.observed === 'object' && row.observed ? JSON.stringify(row.observed) : String(row.observed ?? '—')}\n- Evidence: ${row.message || 'No additional message.'}`)].join('\n');
+            try {
+              const result = await api.previewGitHubIssue({ integration_id: target.integration_id, run_id: props.runId, repository: target.repository, title, body });
+              setDraft({ id: result.id, title: result.title, body: result.body, repository: result.repository });
+            } catch (e) { setPublishError((e as Error).message); }
+            finally { setPublishing(false); }
+          }}>{publishing ? 'Preparing…' : 'Preview issue'}</button>
+          {publishedUrl && <a className="text-xs text-accent underline" href={publishedUrl} target="_blank" rel="noreferrer">Issue published</a>}
+        </div>
+        {draft && <div className="mt-3 rounded-lg border border-border bg-surface p-3">
+          <p className="mb-2 text-xs font-medium">Review the exact issue before publishing to {draft.repository}</p>
+          <input className="field mb-2 text-xs" aria-label="GitHub issue title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+          <textarea className="field min-h-32 w-full resize-y text-xs leading-relaxed" aria-label="GitHub issue body" value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
+          <button type="button" disabled={publishing || !draft.title.trim()} className="btn-primary mt-2 !px-3 !py-1.5 text-xs" onClick={async () => {
+            setPublishing(true); setPublishError('');
+            try { const result = await api.confirmIntegrationAction(draft.id, draft.title, draft.body); setPublishedUrl(result.url); setDraft(null); }
+            catch (e) { setPublishError((e as Error).message); }
+            finally { setPublishing(false); }
+          }}>{publishing ? 'Publishing…' : 'Confirm and create issue'}</button>
+          {publishError && <p role="alert" className="mt-2 text-xs text-fail">{publishError}</p>}
+        </div>}
+        {!draft && publishError && <p role="alert" className="mt-2 text-xs text-fail">{publishError}</p>}
+      </div>}
       <div className="max-h-96 overflow-y-auto">
         {filtered.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted">No checks in this view.</p>}
         {filtered.map((r) => {

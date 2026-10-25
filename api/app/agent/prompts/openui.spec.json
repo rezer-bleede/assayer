@@ -347,7 +347,7 @@
     },
     "IntakeCard": {
       "signature": "IntakeCard(title: string, prompt: string, options: {kind: \"git_url\" | \"file_upload\" | \"connection\" | \"web_target\", label: string, help?: string, placeholder?: string, requirementKey?: string, tables?: string[], targetTables?: string[], preferred?: boolean}[], skipAllowed?: boolean)",
-      "description": "Interactive intake form for a git repository, project upload, or database connection. It performs the REST action itself and then continues the conversation."
+      "description": "Interactive intake form for a project repository, file upload, data source connection, or web app target. It performs the REST action itself and then continues the conversation."
     },
     "PlanCard": {
       "signature": "PlanCard(runId: string, summary?: string, checks: {id: string, name: string, kind: string, table: string, url?: string, selector?: string, expected?: string, steps?: {action: string, selector?: string, value?: string}[], params?: Record<string, any>, column?: string, severity: \"blocker\" | \"critical\" | \"warning\" | \"info\", rationale?: string}[], missingTables?: string[], followUps?: string[])",
@@ -355,19 +355,19 @@
     },
     "AuditReport": {
       "signature": "AuditReport(runId: string, score: number, durationMs?: number, summary?: string, counts: {passed: number, failed: number, errored: number, skipped: number}, checks: {checkId: string, name: string, kind: string, table: string, url?: string, artifacts?: string[], column?: string, severity: string, status: \"pending\" | \"running\" | \"passed\" | \"failed\" | \"error\" | \"skipped\", observed?: string | number | Record<string, any>, expected?: string | number | Record<string, any>, failedRows?: number, message?: string}[], followUps?: string[])",
-      "description": "Final quality report with score, counts, and expandable check results."
+      "description": "Final test report with a score, counts, and expandable check results."
     },
     "EtlCard": {
       "signature": "EtlCard(label?: string, origin: string, language: string, files: string[], sources: string[], targets: string[], risks?: string[], profiles?: {path: string, table: string, format: string, rowCount?: number, columns?: {name: string, dataType: string}[]}[])",
-      "description": "Summary of the analyzed ETL codebase and profiled data files."
+      "description": "Summary of the analyzed project, detected sources and targets, risks, and any profiled files."
     },
     "ConnectionCard": {
       "signature": "ConnectionCard(name: string, type: string, ok: boolean, message?: string, matchedTables?: string[], unmatchedTables?: string[], latencyMs?: number)",
-      "description": "Result of a database connection check, including matched tables."
+      "description": "Result of a source connection check, including matched resources when available."
     },
     "RepairCard": {
       "signature": "RepairCard(note?: string, host?: string, port?: number, database?: string)",
-      "description": "A repaired database address the user can accept with a single action."
+      "description": "A suggested corrected connection address the user can accept with a single action."
     }
   },
   "componentGroups": [
@@ -4500,7 +4500,7 @@
           "options"
         ],
         "additionalProperties": false,
-        "description": "Interactive intake form for a git repository, project upload, or database connection. It performs the REST action itself and then continues the conversation."
+        "description": "Interactive intake form for a project repository, file upload, data source connection, or web app target. It performs the REST action itself and then continues the conversation."
       },
       "PlanCard": {
         "type": "object",
@@ -4815,7 +4815,7 @@
           "checks"
         ],
         "additionalProperties": false,
-        "description": "Final quality report with score, counts, and expandable check results."
+        "description": "Final test report with a score, counts, and expandable check results."
       },
       "EtlCard": {
         "type": "object",
@@ -4913,7 +4913,7 @@
           "targets"
         ],
         "additionalProperties": false,
-        "description": "Summary of the analyzed ETL codebase and profiled data files."
+        "description": "Summary of the analyzed project, detected sources and targets, risks, and any profiled files."
       },
       "ConnectionCard": {
         "type": "object",
@@ -4958,7 +4958,7 @@
           "ok"
         ],
         "additionalProperties": false,
-        "description": "Result of a database connection check, including matched tables."
+        "description": "Result of a source connection check, including matched resources when available."
       },
       "RepairCard": {
         "type": "object",
@@ -4989,7 +4989,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "A repaired database address the user can accept with a single action."
+        "description": "A suggested corrected connection address the user can accept with a single action."
       },
       "Slice": {
         "type": "object",
