@@ -6,17 +6,32 @@
 
 # assayer
 
-**Agentic testing & QA.** Test data, ETL, web apps, and UI/UX with focused plans, evidence-based checks, and clear results.
+**Agentic Testing & QA Platform for Data, ETL, Web Apps, and UI/UX**
 
-Share a project, connect a source, or provide a web-app URL. The agent analyzes the available evidence, proposes relevant checks for your target, and reports results.
+*Automated test suites, data drift detection, ETL column-level lineage, Playwright browser checks, and evidence-based scorecards powered by autonomous AI agents.*
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://docker.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2-blue)](https://langchain-ai.github.io/langgraph/)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-green)](https://assayer.github.io/assayer/)
+
+---
+
+### 🌐 [Visit Marketing & Interactive Documentation Landing Page](https://assayer.github.io/assayer/)
 
 </div>
+
+## Key Features & Capabilities
+
+- **🤖 Autonomous Agentic Test Planning**: Synthesizes baseline and LLM-augmented test suites across databases, ETL pipelines, and web applications.
+- **🔄 ETL Lineage & SQL AST Parsing**: Parses SQL queries (sqlglot), Python AST, and dbt models to map table/column lineage and highlight transformation risks automatically.
+- **📊 Data Profiling & Drift Detection**: Non-destructively profiles live databases (PostgreSQL, ClickHouse, Snowflake, BigQuery, MySQL, DuckDB) and CSV/Parquet files to inspect distributions, schema contracts, and freshness SLAs.
+- **🌐 Web App & UI/UX Automation**: Headless Playwright Chromium test checks covering route loading, element existence, network/console error monitoring, visual screenshot drift, and stateful flow validations.
+- **🎯 Quality Scorecards & AI Root Cause Analysis**: Scores quality from 0–100, captures sample failure rows, and outputs detailed root-cause diagnoses and actionable remediation steps.
+
+---
 
 ## Core testing & QA capabilities
 
@@ -49,11 +64,13 @@ Share a project, connect a source, or provide a web-app URL. The agent analyzes 
 
 **Web and UI/UX testing:** provide a web-app URL for browser-based checks. The agent can verify route loading, visible elements, console/network errors, UI values against source queries, browser flows, and screenshot drift. Data validation is one of the supported verticals, alongside ETL, web, and UI/UX testing.
 
+---
+
 ## Quick start
 
 ```bash
 # 1. Clone the repo
-git clone <your-repo-url>
+git clone https://github.com/assayer/assayer.git
 cd assayer
 
 # 2. Start the stack — that is the whole setup
@@ -275,7 +292,7 @@ api/                     FastAPI + LangGraph backend
     worker.py            Redis-backed execution worker
   tests/                 pytest suite
 web/                     Next.js 14 chat UI (standalone build)
-docs/                    ARCHITECTURE.md · TEST_STRATEGY.md
+docs/                    ARCHITECTURE.md · TEST_STRATEGY.md · index.html
 examples/                demo SQL / Python / dbt manifest
 scripts/                 seed_demo.sh (optional reset) · demo/*.sql (the seeded data)
 ```

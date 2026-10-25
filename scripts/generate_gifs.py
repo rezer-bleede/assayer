@@ -1,296 +1,279 @@
-#!/usr/bin/env python3
+import PIL.Image as Image
+import PIL.ImageDraw as ImageDraw
+import PIL.ImageFont as ImageFont
+import imageio
 import os
-from PIL import Image, ImageDraw, ImageFont
 
-# Ensure target directory exists
-os.makedirs("docs/assets", exist_ok=True)
+width, height = 760, 440
 
-# Font loading with fallback
-def get_fonts():
+def get_font(size=14, bold=False):
     try:
-        title_font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 20)
-        subtitle_font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 15)
-        body_font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", 13)
-        small_font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", 11)
+        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        return ImageFont.truetype(font_path, size)
     except Exception:
-        title_font = subtitle_font = body_font = small_font = ImageFont.load_default()
-    return title_font, subtitle_font, body_font, small_font
+        return ImageFont.load_default()
 
-title_font, subtitle_font, body_font, small_font = get_fonts()
+font_title = get_font(18, True)
+font_sub = get_font(12, False)
+font_body = get_font(13, False)
+font_bold = get_font(13, True)
+font_code = get_font(12, False)
 
-# Color Palette (Dark Theme)
-BG_COLOR = (15, 23, 42)        # Slate 900
-PANEL_BG = (30, 41, 59)        # Slate 800
-BORDER_COLOR = (51, 65, 85)     # Slate 700
-TEXT_MAIN = (241, 245, 249)     # Slate 100
-TEXT_MUTED = (148, 163, 184)    # Slate 400
-ACCENT_BLUE = (56, 189, 248)    # Sky 400
-ACCENT_GREEN = (74, 222, 128)   # Emerald 400
-ACCENT_AMBER = (251, 191, 36)   # Amber 400
-ACCENT_RED = (248, 113, 113)    # Red 400
-ACCENT_PURPLE = (192, 132, 252) # Purple 400
+def draw_header(draw, title_text):
+    draw.rectangle([0, 0, width, 44], fill='#0f172a')
+    draw.ellipse([16, 16, 26, 26], fill='#ef4444')
+    draw.ellipse([34, 16, 44, 26], fill='#f59e0b')
+    draw.ellipse([52, 16, 62, 26], fill='#10b981')
 
-WIDTH, HEIGHT = 640, 380
+    draw.text((80, 14), f"Assayer — {title_text}", fill='#f8fafc', font=font_bold)
+    draw.rectangle([width - 130, 10, width - 16, 34], fill='#1e293b', outline='#334155')
+    draw.text((width - 120, 14), "● Agent Active", fill='#38bdf8', font=font_sub)
 
-def create_window_frame(title, category_badge):
-    img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
-    draw = ImageDraw.Draw(img)
+def draw_card(draw, x, y, w, h, bg='#1e293b', border='#334155'):
+    draw.rectangle([x, y, x + w, y + h], fill=bg, outline=border, width=1)
 
-    # Top window bar
-    draw.rectangle([0, 0, WIDTH, 36], fill=(30, 41, 59))
-    draw.line([0, 36, WIDTH, 36], fill=BORDER_COLOR, width=1)
-
-    # Window control dots
-    draw.ellipse([14, 12, 24, 22], fill=(239, 68, 68))
-    draw.ellipse([32, 12, 42, 22], fill=(245, 158, 11))
-    draw.ellipse([50, 12, 60, 22], fill=(34, 197, 94))
-
-    # Title text
-    draw.text((75, 10), title, font=subtitle_font, fill=TEXT_MAIN)
-
-    # Category badge
-    badge_w = 110
-    draw.rectangle([WIDTH - badge_w - 15, 8, WIDTH - 15, 28], fill=(51, 65, 85))
-    draw.text((WIDTH - badge_w - 8, 11), category_badge, font=small_font, fill=ACCENT_BLUE)
-
-    # Main canvas panel
-    draw.rectangle([15, 48, WIDTH - 15, HEIGHT - 15], fill=PANEL_BG, outline=BORDER_COLOR, width=1)
-
-    return img, draw
-
-# ==========================================
-# GIF 1: ETL & Lineage Analysis
-# ==========================================
-def generate_usecase1_gif():
+# Usecase 1: ETL Lineage & Transformation Parsing
+def make_gif1():
     frames = []
 
     steps = [
-        ("Step 1: Ingesting ETL Pipeline Code", [
-            ("SQL", "INSERT INTO analytics.daily_revenue", ACCENT_BLUE),
-            ("SQL", "SELECT o.order_id, c.customer_id, o.amount", TEXT_MUTED),
-            ("SQL", "FROM raw.orders o INNER JOIN raw.customers c", TEXT_MUTED),
-            ("SQL", "ON o.customer_id = c.customer_id", TEXT_MUTED),
-            ("STATUS", "[Parsing via sqlglot & AST...]", ACCENT_AMBER)
+        ("Ingesting SQL & Python AST", "Parsing raw.orders -> analytics.daily_revenue", [
+            ("SELECT order_id, customer_id, amount FROM raw.orders", "#38bdf8"),
+            ("Lineage target: analytics.daily_revenue", "#94a3b8"),
+            ("Status: Analyzing AST & CTEs...", "#f59e0b")
         ]),
-        ("Step 2: Constructing Lineage Map", [
-            ("TABLE", "raw.orders (id, amount, created_at)", ACCENT_PURPLE),
-            ("TABLE", "raw.customers (id, email, status)", ACCENT_PURPLE),
-            ("FLOW", "    └────► JOIN ──► analytics.daily_revenue", ACCENT_BLUE),
-            ("LINEAGE", "Column Lineage: 3 sources -> 1 target model", TEXT_MAIN),
-            ("STATUS", "[Lineage graph successfully built]", ACCENT_GREEN)
+        ("Lineage Graph Extracted", "1 Table Lineage Node, 2 Upstream Sources Found", [
+            ("analytics.daily_revenue <= raw.orders JOIN raw.customers", "#10b981"),
+            ("Risk Flag: Non-idempotent append on target table", "#ef4444"),
+            ("Risk Flag: INNER JOIN may drop unmatched orders", "#f59e0b")
         ]),
-        ("Step 3: Risk Flags & Transformation Audit", [
-            ("RISK", "⚠ Inner Join: Risk of row loss on missing customer_id", ACCENT_AMBER),
-            ("RISK", "⚠ Unfiltered SELECT: Potential unhandled NULL amounts", ACCENT_AMBER),
-            ("RISK", "✓ Idempotency: Target schema uses strict table keys", ACCENT_GREEN),
-            ("AUDIT", "Lineage analysis complete: 2 risk factors flagged", ACCENT_BLUE),
-            ("STATUS", "[Ready for test plan generation]", ACCENT_GREEN)
+        ("Transformation Vulnerability Scan", "3 Quality Risk Flags Identified", [
+            ("[CRITICAL] Unmatched customer_id orphan key risk", "#ef4444"),
+            ("[WARNING]  Null value propagation in revenue sum", "#f59e0b"),
+            ("[INFO]     Schema Contract: 5 columns mapped perfectly", "#10b981")
         ])
     ]
 
-    for step_title, lines in steps:
-        for pulse in range(3):
-            img, draw = create_window_frame("Assayer · Use Case 1", "ETL LINEAGE")
+    for title, sub, items in steps:
+        img = Image.new('RGB', (width, height), color='#090d16')
+        draw = ImageDraw.Draw(img)
+        draw_header(draw, "1. ETL Lineage & Transformation Analysis")
 
-            # Step header
-            draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
-            draw.text((35, 64), step_title, font=subtitle_font, fill=ACCENT_BLUE)
+        draw_card(draw, 20, 60, 350, 360, bg='#0f172a')
+        draw.text((36, 76), "Input ETL Pipeline (SQL / Python)", fill='#f8fafc', font=font_bold)
 
-            # Content box
-            y = 100
-            for label, text, color in lines:
-                draw.rectangle([35, y, 110, y + 22], fill=(51, 65, 85))
-                draw.text((42, y + 3), label, font=small_font, fill=ACCENT_BLUE)
-                draw.text((120, y + 3), text, font=body_font, fill=color)
-                y += 32
+        code_lines = [
+            "-- models/daily_revenue.sql",
+            "WITH filtered_orders AS (",
+            "  SELECT order_id, customer_id, amount",
+            "  FROM raw.orders WHERE status = 'COMPLETED'",
+            ")",
+            "INSERT INTO analytics.daily_revenue",
+            "SELECT c.id, SUM(o.amount)",
+            "FROM filtered_orders o",
+            "JOIN raw.customers c ON o.customer_id = c.id",
+            "GROUP BY 1;"
+        ]
+        cy = 110
+        for line in code_lines:
+            draw.text((36, cy), line, fill='#94a3b8', font=font_code)
+            cy += 24
 
-            # Footer progress bar
-            draw.rectangle([35, HEIGHT - 35, WIDTH - 35, HEIGHT - 25], fill=(51, 65, 85))
-            prog_w = int((steps.index((step_title, lines)) + 1) / len(steps) * (WIDTH - 70))
-            draw.rectangle([35, HEIGHT - 35, 35 + prog_w, HEIGHT - 25], fill=ACCENT_BLUE)
+        draw_card(draw, 390, 60, 350, 360, bg='#1e293b')
+        draw.text((406, 76), title, fill='#38bdf8', font=font_bold)
+        draw.text((406, 98), sub, fill='#94a3b8', font=font_sub)
 
+        iy = 140
+        for item_text, item_color in items:
+            draw_card(draw, 406, iy, 318, 64, bg='#0f172a', border=item_color)
+            draw.text((418, iy + 20), item_text, fill=item_color, font=font_body)
+            iy += 80
+
+        for _ in range(15):
             frames.append(img)
 
-    frames[0].save(
-        "docs/assets/usecase1-etl-lineage.gif",
-        save_all=True,
-        append_images=frames[1:],
-        duration=1200,
-        loop=0
-    )
-    print("Generated usecase1-etl-lineage.gif")
+    imageio.mimsave('docs/assets/usecase1-etl-lineage.gif', frames, fps=10, loop=0)
 
-# ==========================================
-# GIF 2: Data Profiling & Schema Drift
-# ==========================================
-def generate_usecase2_gif():
+# Usecase 2: Data Validation & Drift Detection
+def make_gif2():
     frames = []
-
     steps = [
-        ("Step 1: Connecting Data Sources & Seeds", [
-            ("SOURCE", "PostgreSQL: analytics_db (wh.internal:5432)", ACCENT_BLUE),
-            ("SEED", "CSV: seeds/raw_customers.csv (40 MB, 12 cols)", TEXT_MUTED),
-            ("DUCKDB", "Parquet/CSV profiled in-memory via DuckDB", ACCENT_PURPLE),
-            ("STATUS", "[Connecting and sampling sources...]", ACCENT_AMBER)
+        ("Profiling Live Database & Seed Files", "Sampling raw.orders & postgresql://wh:5432/dwh", [
+            ("Inspecting column types & row counts...", "#38bdf8"),
+            ("Analyzing value distribution for 'amount'", "#94a3b8"),
+            ("Comparing seed raw_customers.csv with live schema", "#94a3b8")
         ]),
-        ("Step 2: Deep Column & Distribution Profiling", [
-            ("PROFILE", "raw.orders.order_id   : PK · 10,000 rows · 0% null", ACCENT_GREEN),
-            ("PROFILE", "raw.orders.amount     : Float · Range [0.00, 499.00]", TEXT_MAIN),
-            ("PROFILE", "raw.customers.email   : Varchar · 0.01% invalid format", ACCENT_AMBER),
-            ("STATUS", "[Profiled 3 tables, 28 columns in 45ms]", ACCENT_GREEN)
+        ("Schema Drift & Distribution Anomaly Detected", "1 Contract Drift, 1 Out-of-bounds Value", [
+            ("Column 'phone_number' missing in live warehouse", "#ef4444"),
+            ("Value Drift: Negative amount (-$45.00) in 1 row", "#f59e0b"),
+            ("Row count: 12,450 live vs 12,000 baseline", "#10b981")
         ]),
-        ("Step 3: Schema Contract & Drift Verification", [
-            ("CONTRACT", "Seed raw_customers.csv  ──► Live Database Table", ACCENT_BLUE),
-            ("DRIFT", "✖ Column missing in DW: 'signup_channel'", ACCENT_RED),
-            ("DRIFT", "✔ Type match: 'created_at' -> TIMESTAMP", ACCENT_GREEN),
-            ("STATUS", "ALERT: Schema contract drift detected in 1 column!", ACCENT_RED)
+        ("Drift Audit Summary Ready", "100% Non-destructive profiling completed", [
+            ("Null Rate: 0.02% (Pass < 1.0%)", "#10b981"),
+            ("Uniqueness: raw.orders.order_id 1 duplicate found", "#ef4444"),
+            ("Freshness SLA: 18h lag (Warning > 12h)", "#f59e0b")
         ])
     ]
 
-    for step_title, lines in steps:
-        for pulse in range(3):
-            img, draw = create_window_frame("Assayer · Use Case 2", "DATA PROFILING")
+    for title, sub, items in steps:
+        img = Image.new('RGB', (width, height), color='#090d16')
+        draw = ImageDraw.Draw(img)
+        draw_header(draw, "2. Data Validation & Drift Detection")
 
-            draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
-            draw.text((35, 64), step_title, font=subtitle_font, fill=ACCENT_AMBER)
+        draw_card(draw, 20, 60, 350, 360, bg='#0f172a')
+        draw.text((36, 76), "Live Data Sources Profiled", fill='#f8fafc', font=font_bold)
 
-            y = 100
-            for label, text, color in lines:
-                draw.rectangle([35, y, 120, y + 22], fill=(51, 65, 85))
-                draw.text((42, y + 3), label, font=small_font, fill=ACCENT_AMBER)
-                draw.text((130, y + 3), text, font=body_font, fill=color)
-                y += 32
+        sources = [
+            ("Table: raw.orders (12,450 rows)", "#38bdf8"),
+            ("  • order_id: INT (PK, 99.99% Unique)", "#e2e8f0"),
+            ("  • amount: DECIMAL (Min: -$45, Max: $1200)", "#f59e0b"),
+            ("  • created_at: TIMESTAMP (Freshness: 18h)", "#f59e0b"),
+            ("Seed: raw_customers.csv (1,200 rows)", "#38bdf8"),
+            ("  • customer_id: INT (PK)", "#e2e8f0"),
+            ("  • email: VARCHAR (1 invalid pattern)", "#f59e0b"),
+            ("  • phone_number: Missing in Target DB!", "#ef4444")
+        ]
+        cy = 110
+        for line, col in sources:
+            draw.text((36, cy), line, fill=col, font=font_code)
+            cy += 24
 
-            draw.rectangle([35, HEIGHT - 35, WIDTH - 35, HEIGHT - 25], fill=(51, 65, 85))
-            prog_w = int((steps.index((step_title, lines)) + 1) / len(steps) * (WIDTH - 70))
-            draw.rectangle([35, HEIGHT - 35, 35 + prog_w, HEIGHT - 25], fill=ACCENT_AMBER)
+        draw_card(draw, 390, 60, 350, 360, bg='#1e293b')
+        draw.text((406, 76), title, fill='#38bdf8', font=font_bold)
+        draw.text((406, 98), sub, fill='#94a3b8', font=font_sub)
 
+        iy = 140
+        for item_text, item_color in items:
+            draw_card(draw, 406, iy, 318, 64, bg='#0f172a', border=item_color)
+            draw.text((418, iy + 20), item_text, fill=item_color, font=font_body)
+            iy += 80
+
+        for _ in range(15):
             frames.append(img)
 
-    frames[0].save(
-        "docs/assets/usecase2-data-profiling.gif",
-        save_all=True,
-        append_images=frames[1:],
-        duration=1200,
-        loop=0
-    )
-    print("Generated usecase2-data-profiling.gif")
+    imageio.mimsave('docs/assets/usecase2-data-profiling.gif', frames, fps=10, loop=0)
 
-# ==========================================
-# GIF 3: Automated Test Plan Generation
-# ==========================================
-def generate_usecase3_gif():
+# Usecase 3: Test Planning Across Targets
+def make_gif3():
     frames = []
-
     steps = [
-        ("Step 1: Synthesizing Baseline & LLM Test Rules", [
-            ("ENGINE", "Deterministic Planner: Key integrity, NULL checks", ACCENT_BLUE),
-            ("LLM", "LLM Plan Builder: Business logic & SLA thresholds", ACCENT_PURPLE),
-            ("RULE", "Deriving null thresholds from observed rates", TEXT_MUTED),
-            ("STATUS", "[Drafting 29 automated test probes...]", ACCENT_AMBER)
+        ("Synthesizing Baseline Checks", "LLM-augmented rule engine analyzing target", [
+            ("Drafting primary key uniqueness checks...", "#38bdf8"),
+            ("Drafting foreign key referential integrity checks...", "#94a3b8"),
+            ("Drafting web route availability & UI assertions...", "#94a3b8")
         ]),
-        ("Step 2: Draft Plan Review (Human-in-the-Loop)", [
-            ("PLAN", "Critical Probes : 8 (Foreign Keys, Uniqueness, Freshness)", ACCENT_RED),
-            ("PLAN", "Warning Probes  : 15 (Email patterns, Range checks)", ACCENT_AMBER),
-            ("PLAN", "Info Probes     : 6 (Row count parity, Non-negative)", ACCENT_GREEN),
-            ("STATUS", "[Awaiting user approval: 29 checks staged]", ACCENT_BLUE)
+        ("Interactive Plan Review", "Human-in-the-loop review before execution", [
+            ("29 checks proposed across 4 categories", "#10b981"),
+            ("Target: Postgres DWH & Next.js Web App", "#38bdf8"),
+            ("Status: Awaiting Human Approval [Approve Button]", "#f59e0b")
         ]),
-        ("Step 3: Human Approval & Execution Dispatch", [
-            ("ACTION", "User Action: Clicked [ Approve & Run Plan ]", ACCENT_GREEN),
-            ("SAFETY", "Re-validated: All probes compiled to read-only SELECTs", ACCENT_GREEN),
-            ("WORKER", "Dispatched to Redis queue (Concurrency: 4 workers)", ACCENT_BLUE),
-            ("STATUS", "STATUS: RUNNING (29 checks executing)", ACCENT_GREEN)
+        ("Plan Approved by Engineer", "Execution triggered across read-only probes", [
+            ("Approved: 29 checks queued for execution", "#10b981"),
+            ("Compiled aggregate SELECT queries ready", "#10b981"),
+            ("Running non-destructive audit suite...", "#38bdf8")
         ])
     ]
 
-    for step_title, lines in steps:
-        for pulse in range(3):
-            img, draw = create_window_frame("Assayer · Use Case 3", "TEST PLANNING")
+    for title, sub, items in steps:
+        img = Image.new('RGB', (width, height), color='#090d16')
+        draw = ImageDraw.Draw(img)
+        draw_header(draw, "3. Test Planning Across Targets")
 
-            draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
-            draw.text((35, 64), step_title, font=subtitle_font, fill=ACCENT_PURPLE)
+        draw_card(draw, 20, 60, 350, 360, bg='#0f172a')
+        draw.text((36, 76), "Proposed Test Suite (29 Checks)", fill='#f8fafc', font=font_bold)
 
-            y = 100
-            for label, text, color in lines:
-                draw.rectangle([35, y, 115, y + 22], fill=(51, 65, 85))
-                draw.text((42, y + 3), label, font=small_font, fill=ACCENT_PURPLE)
-                draw.text((125, y + 3), text, font=body_font, fill=color)
-                y += 32
+        plan_items = [
+            ("✔ Check 1: raw.orders.order_id Uniqueness", "#10b981"),
+            ("✔ Check 2: daily_revenue FK -> raw.customers", "#10b981"),
+            ("✔ Check 3: Freshness SLA < 24h", "#10b981"),
+            ("✔ Check 4: Non-negative amount constraint", "#10b981"),
+            ("✔ Check 5: Web UI Route /dashboard load", "#10b981"),
+            ("✔ Check 6: Web UI Parity vs DWH Query", "#10b981"),
+            ("✔ Check 7: Visual screenshot drift check", "#10b981"),
+            ("... and 22 additional targeted probes", "#94a3b8")
+        ]
+        cy = 110
+        for line, col in plan_items:
+            draw.text((36, cy), line, fill=col, font=font_code)
+            cy += 28
 
-            draw.rectangle([35, HEIGHT - 35, WIDTH - 35, HEIGHT - 25], fill=(51, 65, 85))
-            prog_w = int((steps.index((step_title, lines)) + 1) / len(steps) * (WIDTH - 70))
-            draw.rectangle([35, HEIGHT - 35, 35 + prog_w, HEIGHT - 25], fill=ACCENT_PURPLE)
+        draw_card(draw, 390, 60, 350, 360, bg='#1e293b')
+        draw.text((406, 76), title, fill='#38bdf8', font=font_bold)
+        draw.text((406, 98), sub, fill='#94a3b8', font=font_sub)
 
+        iy = 140
+        for item_text, item_color in items:
+            draw_card(draw, 406, iy, 318, 64, bg='#0f172a', border=item_color)
+            draw.text((418, iy + 20), item_text, fill=item_color, font=font_body)
+            iy += 80
+
+        for _ in range(15):
             frames.append(img)
 
-    frames[0].save(
-        "docs/assets/usecase3-test-planning.gif",
-        save_all=True,
-        append_images=frames[1:],
-        duration=1200,
-        loop=0
-    )
-    print("Generated usecase3-test-planning.gif")
+    imageio.mimsave('docs/assets/usecase3-test-planning.gif', frames, fps=10, loop=0)
 
-# ==========================================
-# GIF 4: Audit Execution & Scorecard
-# ==========================================
-def generate_usecase4_gif():
+# Usecase 4: QA Results & Scorecard Reporting
+def make_gif4():
     frames = []
-
     steps = [
-        ("Step 1: Running Read-Only Probes", [
-            ("PROBE", "SELECT customer_id FROM analytics.daily_revenue...", TEXT_MUTED),
-            ("PROBE", "SELECT order_id, COUNT(*) FROM raw.orders...", TEXT_MUTED),
-            ("SAFETY", "assert_readonly() verified: 0 write side-effects", ACCENT_GREEN),
-            ("STATUS", "[29/29 probes executed in 1.2s]", ACCENT_BLUE)
+        ("Executing Read-Only Probes", "29 Checks Executed in Parallel (4 workers)", [
+            ("Executing SQL probes against wh database...", "#38bdf8"),
+            ("Capturing sample defect rows...", "#94a3b8"),
+            ("Calculating overall quality score...", "#94a3b8")
         ]),
-        ("Step 2: Quality Scorecard & Defects Found", [
-            ("SCORE", "DATA QUALITY SCORE: 85.31 / 100", ACCENT_GREEN),
-            ("FAIL", "CRITICAL: Foreign Key Orphan (1 customer_id missing)", ACCENT_RED),
-            ("FAIL", "CRITICAL: Duplicate order_id in raw.orders (1 dup)", ACCENT_RED),
-            ("WARN", "WARNING : Freshness SLA breached (~28h vs 24h SLA)", ACCENT_AMBER)
+        ("Quality Scorecard Generated", "Overall Quality Score: 85.31 / 100", [
+            ("Critical Defect: 1 orphan customer row found", "#ef4444"),
+            ("Critical Defect: 1 duplicate order_id found", "#ef4444"),
+            ("Warning: 1 invalid email format detected", "#f59e0b")
         ]),
-        ("Step 3: Failure Samples & Root Cause Narrative", [
-            ("SAMPLE", "Captured failing row: customer_id = 'CST_9981'", ACCENT_RED),
-            ("AI CAUSE", "'Orphan customer_id stems from INNER JOIN in", ACCENT_PURPLE),
-            ("AI CAUSE", " daily_revenue.sql missing fallback handling.'", ACCENT_PURPLE),
-            ("STATUS", "[Audit Report & CSV Export Ready]", ACCENT_GREEN)
+        ("AI Root-Cause Analysis Ready", "Diagnostic Narrative & Fix Recommendation", [
+            ("Root Cause: Missing foreign key constraint on target", "#38bdf8"),
+            ("Sample Row Captured: customer_id = 99999", "#e2e8f0"),
+            ("Export Available: JSON / CSV audit report", "#10b981")
         ])
     ]
 
-    for step_title, lines in steps:
-        for pulse in range(3):
-            img, draw = create_window_frame("Assayer · Use Case 4", "AUDIT REPORTING")
+    for title, sub, items in steps:
+        img = Image.new('RGB', (width, height), color='#090d16')
+        draw = ImageDraw.Draw(img)
+        draw_header(draw, "4. QA Results & Scorecard Reporting")
 
-            draw.rectangle([25, 58, WIDTH - 25, 88], fill=(15, 23, 42))
-            draw.text((35, 64), step_title, font=subtitle_font, fill=ACCENT_GREEN)
+        draw_card(draw, 20, 60, 350, 360, bg='#0f172a')
+        draw.text((36, 76), "Audit Results & Scorecard", fill='#f8fafc', font=font_bold)
 
-            y = 100
-            for label, text, color in lines:
-                draw.rectangle([35, y, 115, y + 22], fill=(51, 65, 85))
-                draw.text((42, y + 3), label, font=small_font, fill=ACCENT_GREEN)
-                draw.text((125, y + 3), text, font=body_font, fill=color)
-                y += 32
+        draw_card(draw, 36, 110, 318, 80, bg='#1e1b4b', border='#6366f1')
+        draw.text((50, 125), "QA SCORE: 85.31 / 100", fill='#818cf8', font=font_title)
+        draw.text((50, 155), "Grade: B+ (2 Critical Defects Found)", fill='#cbd5e1', font=font_sub)
 
-            draw.rectangle([35, HEIGHT - 35, WIDTH - 35, HEIGHT - 25], fill=(51, 65, 85))
-            prog_w = int((steps.index((step_title, lines)) + 1) / len(steps) * (WIDTH - 70))
-            draw.rectangle([35, HEIGHT - 35, 35 + prog_w, HEIGHT - 25], fill=ACCENT_GREEN)
+        res_items = [
+            ("CRITICAL: daily_revenue orphan customer_id (1 row)", "#ef4444"),
+            ("CRITICAL: raw.orders duplicate order_id (1 row)", "#ef4444"),
+            ("WARNING: raw.customers invalid email format", "#f59e0b"),
+            ("INFO: raw.orders negative amount (-$45)", "#38bdf8"),
+            ("PASS: 25 checks passed with zero errors", "#10b981")
+        ]
+        cy = 210
+        for line, col in res_items:
+            draw.text((36, cy), line, fill=col, font=font_code)
+            cy += 28
 
+        draw_card(draw, 390, 60, 350, 360, bg='#1e293b')
+        draw.text((406, 76), title, fill='#38bdf8', font=font_bold)
+        draw.text((406, 98), sub, fill='#94a3b8', font=font_sub)
+
+        iy = 140
+        for item_text, item_color in items:
+            draw_card(draw, 406, iy, 318, 64, bg='#0f172a', border=item_color)
+            draw.text((418, iy + 20), item_text, fill=item_color, font=font_body)
+            iy += 80
+
+        for _ in range(15):
             frames.append(img)
 
-    frames[0].save(
-        "docs/assets/usecase4-audit-reporting.gif",
-        save_all=True,
-        append_images=frames[1:],
-        duration=1200,
-        loop=0
-    )
-    print("Generated usecase4-audit-reporting.gif")
+    imageio.mimsave('docs/assets/usecase4-audit-reporting.gif', frames, fps=10, loop=0)
 
-if __name__ == "__main__":
-    generate_usecase1_gif()
-    generate_usecase2_gif()
-    generate_usecase3_gif()
-    generate_usecase4_gif()
-    print("All 4 use case GIFs generated successfully.")
+make_gif1()
+make_gif2()
+make_gif3()
+make_gif4()
+print("All 4 preview gifs generated successfully!")
