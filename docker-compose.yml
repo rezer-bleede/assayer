@@ -54,13 +54,9 @@ services:
         echo "demo data ready"
     restart: "no"
 
-  # Local model runner. On by default for Linux and Windows hosts — the app's
-  # LLM settings point here, so a plain `docker compose up` gets a working
-  # local model with no setup. On macOS, Docker cannot pass the Apple GPU to
-  # containers (the model would run CPU-only, ~8 tok/s), so `make up` skips
-  # this service pair in favour of a native, Metal-accelerated Ollama instead
-  # (see the Makefile and README -> "Faster on macOS").
+  # Optional bundled model. Enable explicitly with `--profile local-model`.
   ollama:
+    profiles: ["local-model"]
     image: ollama/ollama:latest
     volumes:
       - ollama:/root/.ollama
@@ -79,6 +75,7 @@ services:
   # Pulls the model once, then exits. The API does not wait for it: until the
   # model is there the agent falls back to its deterministic planner.
   ollama-model:
+    profiles: ["local-model"]
     image: ollama/ollama:latest
     depends_on:
       ollama:
@@ -110,7 +107,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-assayer}:${POSTGRES_PASSWORD:-assayer}@db:5432/${POSTGRES_DB:-assayer}
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
       UI_ARTIFACT_DIR: /data/ui-artifacts
@@ -149,7 +146,7 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-assayer}:${POSTGRES_PASSWORD:-assayer}@db:5432/${POSTGRES_DB:-assayer}
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:3b}
       UI_ARTIFACT_DIR: /data/ui-artifacts

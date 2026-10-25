@@ -22,13 +22,23 @@ from app.store.db import init_db
 
 QUEUE = "assayer:jobs"
 PROGRESS_CHANNEL = "assayer:progress"
+QUEUE_POLL_SECONDS = 5
+REDIS_SOCKET_TIMEOUT_SECONDS = QUEUE_POLL_SECONDS + 5
 _results: list[RunResult] = []
 
 
 def _redis() -> Any:
     import redis
 
-    return redis.from_url(settings.redis_url, decode_responses=True)
+    # A blocking pop can wait for the full poll interval. Keep the socket
+    # timeout longer than BRPOP's timeout so an idle queue is a normal None
+    # result, not a redis.exceptions.TimeoutError on every poll.
+    return redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+    )
 
 
 async def publish_progress(event: str, data: dict) -> None:
@@ -81,7 +91,7 @@ async def worker_loop() -> None:
     log.info("worker ready", queue=QUEUE)
     while True:
         try:
-            item = await asyncio.to_thread(r.brpop, QUEUE, timeout=5)
+            item = await asyncio.to_thread(r.brpop, QUEUE, timeout=QUEUE_POLL_SECONDS)
             if item is None:
                 continue
             _, payload = item

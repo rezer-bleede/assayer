@@ -67,8 +67,9 @@ docker compose up -d --build
 
 On first visit, create the administrator using the one-time token in `.env`.
 The setup closes after the first account is created, and existing chats and
-projects are adopted by that account. The stack starts a local model, pulls it,
-and applies a demo dataset. Keep `.env` private and set a unique `SECRET_KEY`
+projects are adopted by that account, and the stack applies a demo dataset. A
+local model is optional; without one, Assayer uses its deterministic planner.
+Keep `.env` private and set a unique `SECRET_KEY`
 before deploying beyond a trusted local environment. Google and OpenID Connect
 sign-in are optional; configure their provider credentials in `.env`.
 
@@ -100,11 +101,15 @@ sign-in are optional; configure their provider credentials in `.env`.
 
 ### The model
 
-A local model runner ships with the stack: the first boot pulls
-`qwen2.5-coder:3b` (~1.9 GB) into the `ollama` volume, after which the agent
-uses it out of the box. Until the pull finishes, the agent falls back to its
-deterministic planner, so the app is usable immediately. (On macOS `make up`
-skips the bundled runner — see the next section.)
+The bundled Ollama container is **disabled by default**, so starting Assayer
+does not download a model or reserve memory for an inference container. The app
+works without a model using its deterministic planner. For local inference,
+install Ollama on the host, pull a model, and use the default
+`host.docker.internal:11434` endpoint from `.env.example`. To run Ollama in
+Compose instead, use `make up-local-model`; it enables the profile, points the
+API at the container, and pulls `qwen2.5-coder:3b` (~1.9 GB) on first use. For
+direct Compose commands, set `LLM_BASE_URL=http://ollama:11434/v1` and enable
+`--profile local-model`.
 
 The local development setup uses `qwen2.5-coder:3b` to keep the model footprint
 manageable. The heavier `qwen3.5:9b` and `qwen3.5:9b-8k` tags were removed from
@@ -138,20 +143,16 @@ LLM_API_KEY=gsk_...
 LLM_MODEL=openai/gpt-oss-120b
 ```
 
-#### Faster on macOS: run the model on the GPU
+#### Run Ollama on the host
 
-The bundled runner stays the default everywhere **except macOS**: Docker on
-macOS cannot pass the Apple GPU to containers, so the in-Docker model would
-run CPU-only (~8 tokens/s — slow enough that a full plan can outlive its
-deadline and fall back to the deterministic planner). Installed natively,
-Ollama uses Metal (~40 tokens/s) and a plan takes about a minute. `make up`
-detects macOS and skips the bundled runner automatically; Linux and Windows
-hosts keep the old behavior unchanged:
+Host Ollama keeps inference outside Docker and can use hardware acceleration
+available on the host. On macOS it uses Metal; Docker cannot pass through the
+Apple GPU to a bundled container. Install Ollama and pull the default model once:
 
 ```sh
 brew install --cask ollama        # or download from https://ollama.com
 ollama pull qwen2.5-coder:3b
-make up                           # skips the bundled runner on macOS
+make up                           # does not start the bundled runner
 ```
 
 ```dotenv
@@ -193,11 +194,10 @@ call with whatever was generated, and the deterministic planner/reporter takes
 over.
 
 Env changes apply on `make up` or `docker compose up -d api worker` (a plain
-`restart` does not re-read .env). To force the bundled runner on macOS anyway:
-`make up BUNDLED=1`, which expects `LLM_BASE_URL` to point at it (the default,
-`http://ollama:11434/v1`) rather than at a native install. On any platform,
-running `docker compose up` directly (not through `make`) always starts the
-bundled runner, even on macOS. Note `brew install ollama` (without `--cask`)
+`restart` does not re-read `.env`). To use the bundled runner, run
+`make up-local-model` (equivalent to setting
+`LLM_BASE_URL=http://ollama:11434/v1` and running
+`docker compose --profile local-model up -d --build`). Note `brew install ollama` (without `--cask`)
 builds from source and can hang on older macOS — use the cask or the prebuilt
 app, and launch it once so its server is listening on `127.0.0.1:11434`.
 
@@ -406,6 +406,7 @@ planner takes over):
 
 ```bash
 make up       # build + start
+make up-local-model # also start the bundled Ollama runner
 make logs     # tail
 make ps       # status
 make test     # pytest in the api container
@@ -434,8 +435,8 @@ See `.env.example`. Key knobs:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | ollama / http://ollama:11434/v1 / ollama / qwen2.5-coder:3b | any OpenAI-compatible endpoint (hosted: OpenAI, Groq free tier, …) |
-| `OLLAMA_MODEL` | qwen2.5-coder:3b | the model the stack pulls into the local runner |
+| `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | ollama / http://host.docker.internal:11434/v1 / ollama / qwen2.5-coder:3b | host Ollama or any OpenAI-compatible endpoint |
+| `OLLAMA_MODEL` | qwen2.5-coder:3b | model pulled when the optional `local-model` Compose profile is enabled |
 | `RUN_MAX_CHECKS` | 200 | cap on checks per run |
 | `RUN_MAX_ROW_SAMPLE` | 20 | sample rows captured per failure |
 | `LLM_TIMEOUT_SECONDS` | 90 | seconds per model call before the deterministic planner takes over |
