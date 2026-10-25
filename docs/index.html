@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assayer — Agentic Testing & QA Platform for Data, ETL, & Web Apps</title>
+  <meta name="description" content="Assayer is an autonomous AI agentic testing and QA framework for ETL pipelines, databases, and web applications. Detect data drift, parse SQL lineage, and run Playwright browser flows.">
+  <meta name="keywords" content="agentic testing, data quality, ETL lineage, data drift detection, Playwright automated testing, LangGraph agent, AI QA software, dbt test automation, PostgreSQL profiling">
+
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="#" class="logo">
+        <svg width="32" height="32" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="30" fill="#38BDF8" fill-opacity="0.15" stroke="#38BDF8" stroke-width="3"/>
+          <path d="M20 34L28 42L44 22" stroke="#38BDF8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="logo-text">assayer</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#demo">Live Use Cases</a>
+        <a href="#quickstart">Quick Start</a>
+        <a href="https://github.com/assayer/assayer" class="github-btn" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="hero-container">
+      <div class="badge">🚀 Autonomous Quality Engineering</div>
+      <h1 class="hero-title">Agentic Testing & QA Platform for Data, ETL & Web Apps</h1>
+      <p class="hero-subtitle">
+        Assayer connects your databases, code repositories, and web applications to an autonomous AI agent. It inspects evidence, extracts column-level ETL lineage, profiles schema drift, and runs non-destructive Playwright browser checks.
+      </p>
+      <div class="hero-actions">
+        <a href="#quickstart" class="btn btn-primary">Get Started in 60s</a>
+        <a href="https://github.com/assayer/assayer" class="btn btn-secondary" target="_blank" rel="noopener">View Source on GitHub</a>
+      </div>
+
+      <!-- Hero Demo Preview Card -->
+      <div class="hero-preview">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="terminal-title">Assayer Agent Session — OpenUI Lang Stream</div>
+        </div>
+        <div class="terminal-body">
+          <div class="chat-row agent-row">
+            <div class="avatar">🤖</div>
+            <div class="bubble">
+              <span class="highlight">Analysis Complete:</span> Ingested ETL script <code>demo_daily_revenue.sql</code> & PostgreSQL warehouse <code>postgresql://wh:5432/dwh</code>.
+              <br><br>
+              <strong>Extracted Lineage & Drift Evidence:</strong>
+              <ul>
+                <li>Target: <code>analytics.daily_revenue</code> (5 columns)</li>
+                <li>Identified 1 Orphan Key vulnerability in <code>customer_id</code> join</li>
+                <li>Detected 1 Uniqueness violation in <code>raw.orders.order_id</code></li>
+              </ul>
+              <div class="score-chip">QA Score: 85.31 / 100 — 29 Probes Executed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Key Value Props -->
+  <section id="features" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Core Capabilities & Verticals</h2>
+        <p>End-to-end evidence-based testing across data infrastructure and frontend web interfaces.</p>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3>ETL Lineage & AST Parsing</h3>
+          <p>Parses SQL queries with sqlglot, Python AST scripts, and dbt manifests. Extracts column-level lineage and automatically flags non-idempotent appends or drop-row risks.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <h3>Data Profiling & Drift Detection</h3>
+          <p>Non-destructively profiles live databases (Postgres, ClickHouse, Snowflake, DuckDB) and seed CSV/Parquet files to detect schema contract violations and distribution drift.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎭</div>
+          <h3>Playwright Web & UI Automation</h3>
+          <p>Headless browser integration verifies same-origin route availability, DOM element presence, network/console health, screenshot visual drift, and database-to-UI value parity.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📋</div>
+          <h3>Human-in-the-Loop Planning</h3>
+          <p>The agent drafts target-specific check proposals for engineer review before execution. Probes run only after approval with single read-only transactions.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎯</div>
+          <h3>Scorecards & AI Diagnoses</h3>
+          <p>Calculates a weighted QA quality score (0–100), captures sample failure rows, and uses LLM reasoning to explain root causes and recommended fixes.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🔒</div>
+          <h3>Enterprise Security & Local Privacy</h3>
+          <p>Ships with a local bundled LLM runner (qwen2.5-coder). Credentials are protected as redacted secrets, and data probes are strictly read-only.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live Use Cases Section -->
+  <section id="demo" class="section bg-alt">
+    <div class="container">
+      <div class="section-header">
+        <h2>Visual Workflow & Evidence</h2>
+        <p>See how Assayer operates across intake, profiling, plan review, and scorecard generation.</p>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="media-card">
+          <img src="assets/usecase1-etl-lineage.gif" alt="ETL Lineage & Transformation Analysis" loading="lazy">
+          <div class="media-content">
+            <h4>1. ETL Testing & Lineage Analysis</h4>
+            <p>Parses complex SQL CTEs and Python dataframes into interactive column lineage graphs with automatic risk detection.</p>
+          </div>
+        </div>
+
+        <div class="media-card">
+          <img src="assets/usecase2-data-profiling.gif" alt="Data Validation & Drift Detection" loading="lazy">
+          <div class="media-content">
+            <h4>2. Data Profiling & Drift Detection</h4>
+            <p>Inspects live database tables and CSV seed files to compare schema contracts and highlight anomaly row counts.</p>
+          </div>
+        </div>
+
+        <div class="media-card">
+          <img src="assets/usecase3-test-planning.gif" alt="Test Planning Across Targets" loading="lazy">
+          <p class="media-content">
+            <strong>3. Test Planning Across Targets</strong><br>
+            Generates baseline and LLM-augmented test suites for approval before running non-destructive queries.
+          </p>
+        </div>
+
+        <div class="media-card">
+          <img src="assets/usecase4-audit-reporting.gif" alt="QA Results & Scorecard Reporting" loading="lazy">
+          <div class="media-content">
+            <h4>4. Scorecards & Diagnostic Reports</h4>
+            <p>Executes probes in parallel, captures failure row samples, and outputs overall quality scores with root cause analysis.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture" class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>System Architecture</h2>
+        <p>Designed with FastAPI, LangGraph, Redis execution workers, and Next.js OpenUI frontend.</p>
+      </div>
+
+      <div class="arch-box">
+        <pre class="arch-diagram">
++-----------------------------------------------------------------------------------+
+|                                 Next.js 14 Chat UI                                |
+|                        (OpenUI Lang / AG-UI SSE Protocols)                        |
++------------------------------------------+----------------------------------------+
+                                           |
+                                           v
++-----------------------------------------------------------------------------------+
+|                             FastAPI + LangGraph Backend                           |
+|  +--------------------+   +-----------------------+   +------------------------+  |
+|  | ETL Parsers        |   | Connector Engine      |   | Agent Planner & Graph  |  |
+|  | (sqlglot / AST)    |   | (Postgres / Clickhouse|   | (LangGraph State Machine|  |
+|  |                    |   |  Snowflake / DuckDB)  |   |  Human-in-the-Loop)    |  |
+|  +--------------------+   +-----------------------+   +------------------------+  |
++------------------------------------------+----------------------------------------+
+                                           |
+                                           v
++-----------------------------------------------------------------------------------+
+|                         Redis Queue & Check Executor Worker                       |
+|   +------------------------------------+   +----------------------------------+   |
+|   | Aggregate Read-Only SELECT Probes  |   | Headless Playwright Chromium     |   |
+|   +------------------------------------+   +----------------------------------+   |
++-----------------------------------------------------------------------------------+
+        </pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart -->
+  <section id="quickstart" class="section bg-alt">
+    <div class="container">
+      <div class="section-header">
+        <h2>Quick Start with Docker</h2>
+        <p>Spin up the entire stack including local model, database, and web interface in 60 seconds.</p>
+      </div>
+
+      <div class="code-card">
+        <div class="code-header">Terminal</div>
+        <pre><code><span class="comment"># 1. Clone the repository</span>
+git clone https://github.com/assayer/assayer.git
+cd assayer
+
+<span class="comment"># 2. Start all services in Docker (UI, API, Redis, Worker, Local Ollama)</span>
+docker compose up -d --build
+
+<span class="comment"># 3. Open http://localhost:3010 in your browser!</span></code></pre>
+      </div>
+
+      <div class="service-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Endpoint / Port</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Chat UI</td>
+              <td><code>http://localhost:3010</code></td>
+              <td>OpenUI Agentic Chat & Project Knowledge Base</td>
+            </tr>
+            <tr>
+              <td>API Docs</td>
+              <td><code>http://localhost:8010/docs</code></td>
+              <td>FastAPI Swagger REST & SSE OpenAPI documentation</td>
+            </tr>
+            <tr>
+              <td>Health Check</td>
+              <td><code>http://localhost:8010/healthz</code></td>
+              <td>Backend & Database readiness endpoint</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-container">
+      <div class="footer-left">
+        <h3>assayer</h3>
+        <p>Agentic Testing & QA Platform for Data, ETL, and Web Applications.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/assayer/assayer" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/assayer/assayer/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+        <a href="#features">Features</a>
+        <a href="#quickstart">Quick Start</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; Assayer Open Source Community. Distributed under the MIT License.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
